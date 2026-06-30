@@ -36,18 +36,25 @@ export default function ProviderKyc() {
 
   async function handleUpload(type: DocType, file: File) {
     if (!profile?.id) return
+    if (file.size > 5 * 1024 * 1024) {
+      toast.error('File too large. Max 5MB allowed.')
+      return
+    }
     setUploading(type)
     try {
       await uploadKycDoc(profile.id, file, type)
       setUploaded(u => ({ ...u, [type]: true }))
       toast.success(`${type} uploaded successfully!`)
-      // Reload to get updated kyc_status
       const updated = await getProviderProfile(profile.id)
       setProviderData(updated)
     } catch (err: any) {
-      // Fallback: mark uploaded locally even if storage fails (DB-only approach)
-      setUploaded(u => ({ ...u, [type]: true }))
-      toast.success(`${type} marked as submitted`)
+      console.error('KYC upload failed:', err)
+      toast.error(
+        err?.message?.includes('Bucket not found')
+          ? 'Storage not set up yet. Contact admin to create the kyc-documents bucket in Supabase.'
+          : err?.message || 'Upload failed. Please try again.'
+      )
+
     } finally {
       setUploading(null)
     }
