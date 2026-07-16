@@ -352,75 +352,15 @@ export default function CustomerBook() {
             )}
 
             {/* ── STEP 3 ── */}
-            {step===3 && (
-              <div>
-                <h3 style={{ fontWeight:700, fontSize:16, marginBottom:18 }}>Confirm your booking</h3>
-                <div style={{ background:'var(--bg2)', borderRadius:14, overflow:'hidden', marginBottom:18 }}>
-                  <div style={{ display:'flex', gap:12, alignItems:'center', padding:'14px 16px', borderBottom:'1px solid var(--border)' }}>
-                    <Avatar name={selectedProv?.profile?.full_name??'P'} size={40} />
-                    <div>
-                      <p style={{ fontWeight:700, fontSize:14 }}>{selectedProv?.profile?.full_name}</p>
-                      <p style={{ fontSize:12, color:'var(--text2)' }}>
-                        ★{selectedProv?.rating>0?Number(selectedProv.rating).toFixed(1):'New'} · ✓ KYC Verified · {svc.icon} {svc.name}
-                      </p>
-                    </div>
-                    <span className="badge badge-green" style={{ marginLeft:'auto' }}>Online</span>
-                  </div>
-                  <div style={{ padding:'12px 16px', borderBottom:'1px solid var(--border)', fontSize:13, color:'var(--text2)' }}>
-                    📍 {address}, {city||district}, {district}
-                  </div>
-                  <div style={{ padding:'14px 16px' }}>
-                    {[
-                      [`${svc.name} (${svcType==='manpower'?hours+' hrs × ₹'+rate:'1 trip'})`, '₹'+price.base],
-                      ['Platform fee (5%)', '₹'+price.fee],
-                      ['GST (18%)',          '₹'+price.gst],
-                    ].map(([k,v],i)=>(
-                      <div key={i} style={{ display:'flex', justifyContent:'space-between', fontSize:13, color:'var(--text2)', marginBottom:8 }}>
-                        <span>{k}</span><span>{v}</span>
-                      </div>
-                    ))}
-                    <div style={{ display:'flex', justifyContent:'space-between', fontWeight:800, fontSize:17, borderTop:'1px solid var(--border)', paddingTop:12, marginTop:4 }}>
-                      <span>Total</span><span style={{ color:'var(--brand)' }}>₹{price.total}</span>
-                    </div>
-                    <p style={{ fontSize:11, color:'var(--text3)', marginTop:8 }}>💡 Amount charged only after job completion via OTP</p>
-                  </div>
-                </div>
-
-                <div style={{ marginBottom:16 }}>
-                  <label className="input-label">Special instructions (optional)</label>
-                  <input className="input" placeholder="Enter from side gate, call on arrival..." value={notes} onChange={e=>setNotes(e.target.value)} />
-                </div>
-
-                <div style={{ marginBottom:18 }}>
-                  <p style={{ fontWeight:600, fontSize:13, marginBottom:10 }}>Payment method</p>
-                  <div style={{ display:'grid', gridTemplateColumns:'repeat(4,1fr)', gap:8 }}>
-                    {[['upi','📱','UPI'],['card','💳','Card'],['wallet','👛','Wallet'],['cash','💵','Cash']].map(([m,icon,label])=>(
-                      <button key={m} onClick={()=>setPayMethod(m)}
-                        style={{ padding:'12px 6px', borderRadius:10, border:`2px solid ${payMethod===m?'var(--brand)':'var(--border)'}`, background:payMethod===m?'var(--brand-light)':'var(--bg2)', cursor:'pointer', fontFamily:'Inter,sans-serif', transition:'all 0.15s' }}>
-                        <div style={{ fontSize:20, marginBottom:4 }}>{icon}</div>
-                        <div style={{ fontSize:11, fontWeight:600, color:payMethod===m?'var(--brand)':'var(--text)' }}>{label}</div>
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
-                <div style={{ background:'rgba(22,163,74,0.06)', border:'1px solid rgba(22,163,74,0.2)', borderRadius:10, padding:12, marginBottom:18, fontSize:12, color:'#16a34a' }}>
-                  🛡️ Work guarantee · KYC verified provider · Free cancellation before arrival
-                </div>
-
-                <div style={{ display:'flex', gap:10 }}>
-                  <button className="btn btn-outline" style={{ flex:1 }} onClick={()=>setStep(2)}>← Back</button>
-                  <button className="btn btn-brand" style={{ flex:2, padding:'13px', fontSize:15 }} disabled={loading} onClick={confirmBooking}>
-                    {loading ? (
-                      <span style={{ display:'flex', alignItems:'center', justifyContent:'center', gap:8 }}>
-                        <div style={{ width:15, height:15, border:'2px solid rgba(255,255,255,0.3)', borderTop:'2px solid #fff', borderRadius:'50%', animation:'spin 0.8s linear infinite' }} />
-                        Confirming...
-                      </span>
-                    ) : `Confirm & Book · ₹${price.total}`}
-                  </button>
-                </div>
-              </div>
-            )}
+            {step === 3 && (
+             <BookingConfirmPage
+             svc={svc} selectedProv={selectedProv} price={price}
+             address={address} city={city} district={district}
+             notes={notes} setNotes={setNotes}
+             hours={hours} svcType={svcType} rate={rate}
+            onBack={() => setStep(2)}
+            />
+           )}
           </div>
         </div>
       </div>
