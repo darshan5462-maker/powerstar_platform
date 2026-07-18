@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuthStore } from '@/store/authStore'
 import { getProviderBookings, acceptBooking } from '@/services/bookingService'
@@ -17,11 +17,18 @@ export default function ProviderHome() {
   const [myJobs,    setMyJobs]    = useState<any[]>([])
   const [kycStatus, setKycStatus] = useState<string>('loading')
   const [loading,   setLoading]   = useState(true)
+
+  // Use refs to avoid stale closures in realtime callbacks
+  const profileRef  = useRef(profile)
+  const districtRef = useRef(profile?.district)
+  useEffect(() => {
+    profileRef.current  = profile
+    districtRef.current = profile?.district
+  }, [profile])
+
   const first = profile?.full_name?.split(' ')[0] ?? 'Provider'
 
-  // Load ALL pending bookings in provider's district
-  const loadRequests = useCallback(async () => {
-    if (!profile?.district) return []
+  async function fetchRequests(district: string) {
     const { data, error } = await supabase
       .from('bookings')
       .select(`
@@ -30,78 +37,78 @@ export default function ProviderHome() {
         customer:profiles!bookings_customer_id_fkey(full_name, phone)
       `)
       .eq('status', 'pending')
-      .ilike('district', profile.district.trim()) // case-insensitive match
+      .ilike('district', district.trim())
       .order('created_at', { ascending: false })
       .limit(20)
-    if (error) console.error('Requests load error:', error)
-    console.log('Provider requests for district', profile.district, ':', data?.length ?? 0, data)
+    if (error) console.error('Fetch requests error:', error.message, error.code)
+    console.log(`Provider requests for district ${district}:`, data?.length ?? 0, data)
     return data ?? []
-  }, [profile?.district])
+  }
 
-  const load = useCallback(async () => {
-    if (!profile?.id) return
+  async function loadAll() {
+    const p = profileRef.current
+    if (!p?.id) return
 
-    // Get own provider row
-    const { data: provRow, error: provErr } = await supabase
+    const { data: provRow } = await supabase
       .from('providers')
       .select('kyc_status, is_online')
-      .eq('id', profile.id)
+      .eq('id', p.id)
       .maybeSingle()
 
-    if (provErr) console.error('Provider row error:', provErr)
     setKycStatus(provRow?.kyc_status ?? 'pending')
     setOnline(provRow?.is_online ?? false)
 
+    const district = p.district || 'Bengaluru Urban'
     const [reqs, jobs] = await Promise.all([
-      loadRequests(),
-      getProviderBookings(profile.id),
+      fetchRequests(district),
+      getProviderBookings(p.id),
     ])
     setRequests(reqs)
     setMyJobs(jobs)
     setLoading(false)
-  }, [profile?.id, loadRequests])
+  }
 
-  useEffect(() => { load() }, [load])
+  // Initial load only once
+  useEffect(() => {
+    if (profile?.id) loadAll()
+  }, [profile?.id]) // eslint-disable-line
 
-  // Realtime — NO filter on district (filters on non-indexed cols fail silently)
-  // Instead receive ALL booking changes and filter client-side
+  // Stable realtime subscription — created once, never recreated
   useEffect(() => {
     if (!profile?.id) return
 
+    const channelName = `provider-stable-${profile.id}`
+
     const channel = supabase
-      .channel(`provider-rt-${profile.id}`)
-      .on(
-        'postgres_changes',
+      .channel(channelName, { config: { presence: { key: profile.id } } })
+      .on('postgres_changes',
         { event: 'INSERT', schema: 'public', table: 'bookings' },
         async (payload: any) => {
-          const newBooking = payload.new
-          console.log('New booking received:', newBooking)
-          // Only notify if in same district (case-insensitive)
-          const norm = (s?: string) => (s ?? '').trim().toLowerCase()
-          if (norm(newBooking.district) === norm(profile.district)) {
-            toast('📩 New job request near you!', {
-              icon: '🔔',
-              duration: 6000,
-              style: { fontWeight: 700 },
-            })
-            // Reload requests to get full joined data
-            const reqs = await loadRequests()
+          const booking  = payload.new
+          const district = districtRef.current || ''
+          const norm     = (s?: string) => (s ?? '').trim().toLowerCase()
+          console.log('New booking INSERT:', booking.district, '| Provider district:', district)
+          if (norm(booking.district) === norm(district)) {
+            toast('📩 New job request!', { icon: '🔔', duration: 6000 })
+            const reqs = await fetchRequests(district)
             setRequests(reqs)
           }
         }
       )
-      .on(
-        'postgres_changes',
+      .on('postgres_changes',
         { event: 'UPDATE', schema: 'public', table: 'bookings' },
         async () => {
-          const reqs = await loadRequests()
+          const p = profileRef.current
+          if (!p?.id || !p?.district) return
+          const [reqs, jobs] = await Promise.all([
+            fetchRequests(p.district),
+            getProviderBookings(p.id),
+          ])
           setRequests(reqs)
-          const jobs = await getProviderBookings(profile.id)
           setMyJobs(jobs)
         }
       )
-      .on(
-        'postgres_changes',
+      .on('postgres_changes',
         { event: 'UPDATE', schema: 'public', table: 'providers',
           filter: `id=eq.${profile.id}` },
         (payload: any) => {
@@ -114,20 +121,23 @@ export default function ProviderHome() {
           if (typeof io === 'boolean') setOnline(io)
         }
       )
-      .on(
-        'postgres_changes',
+      .on('postgres_changes',
         { event: 'INSERT', schema: 'public', table: 'notifications',
           filter: `user_id=eq.${profile.id}` },
         (payload: any) => {
           toast(payload.new?.title ?? 'New notification', { icon: '🔔' })
         }
       )
-      .subscribe((status) => {
-        console.log('Realtime channel status:', status)
+      .subscribe((status, err) => {
+        console.log('Realtime status:', status, err ?? '')
       })
 
-    return () => { supabase.removeChannel(channel) }
-  }, [profile?.id, profile?.district, loadRequests])
+    // Cleanup only on unmount
+    return () => {
+      console.log('Removing realtime channel')
+      supabase.removeChannel(channel)
+    }
+  }, [profile?.id]) // eslint-disable-line — only run once per profile
 
   async function toggleOnline() {
     if (!profile?.id) return
@@ -157,14 +167,14 @@ export default function ProviderHome() {
     try {
       await acceptBooking(bookingId, profile.id)
       setRequests(prev => prev.filter(r => r.id !== bookingId))
-      toast.success('✅ Job accepted!')
+      toast.success('✅ Job accepted! Navigate to customer.')
       const jobs = await getProviderBookings(profile.id)
       setMyJobs(jobs)
-    } catch { toast.error('Failed — booking may have been taken') }
+    } catch { toast.error('Failed — booking may have been taken already') }
   }
 
-  const earned    = myJobs.filter(j=>j.status==='completed').reduce((s,j)=>s+(j.total_amount||0)*0.9, 0)
-  const todayJobs = myJobs.filter(j=>new Date(j.created_at).toDateString()===new Date().toDateString())
+  const earned    = myJobs.filter(j => j.status==='completed').reduce((s,j) => s+(j.total_amount||0)*0.9, 0)
+  const todayJobs = myJobs.filter(j => new Date(j.created_at).toDateString()===new Date().toDateString())
 
   return (
     <div>
@@ -179,10 +189,10 @@ export default function ProviderHome() {
               color: kycStatus==='verified'?'#16a34a':kycStatus==='submitted'?'#2563eb':'#d97706',
               border:`1px solid ${kycStatus==='verified'?'rgba(22,163,74,0.3)':kycStatus==='submitted'?'rgba(37,99,235,0.3)':'rgba(217,119,6,0.3)'}`,
               textTransform:'capitalize' as const,
-            }}>KYC: {kycStatus==='loading'?'...':kycStatus}</span>
-            <button
-              onClick={toggleOnline}
-              disabled={toggling || kycStatus!=='verified'}
+            }}>
+              KYC: {kycStatus==='loading'?'...':kycStatus}
+            </span>
+            <button onClick={toggleOnline} disabled={toggling||kycStatus!=='verified'}
               title={kycStatus!=='verified'?'Complete KYC first':undefined}
               style={{
                 display:'flex', alignItems:'center', gap:10, padding:'9px 18px', borderRadius:10,
@@ -219,7 +229,7 @@ export default function ProviderHome() {
             <span style={{ fontSize:20 }}>⏳</span>
             <div>
               <p style={{ fontWeight:700, fontSize:13, color:'#2563eb' }}>KYC Under Review</p>
-              <p style={{ fontSize:12, color:'var(--text2)', marginTop:2 }}>Admin will approve within 24 hours. You will be notified instantly.</p>
+              <p style={{ fontSize:12, color:'var(--text2)', marginTop:2 }}>Admin will approve within 24 hours.</p>
             </div>
           </div>
         )}
@@ -228,17 +238,17 @@ export default function ProviderHome() {
             <span style={{ fontSize:20 }}>✅</span>
             <div style={{ flex:1 }}>
               <p style={{ fontWeight:700, fontSize:13, color:'#16a34a' }}>KYC Verified! Toggle Online to receive bookings</p>
-              <p style={{ fontSize:12, color:'var(--text2)', marginTop:2 }}>Toggle Online above to start receiving requests in {profile?.district}.</p>
+              <p style={{ fontSize:12, color:'var(--text2)', marginTop:2 }}>Use the Online button above to start receiving requests in {profile?.district}.</p>
             </div>
           </div>
         )}
 
         {/* Stats */}
         <div style={{ display:'grid', gridTemplateColumns:'repeat(4,1fr)', gap:14, marginBottom:22 }}>
-          <StatCard icon="💰" iconBg="rgba(249,115,22,0.1)" label="Total Earned"  value={earned>0?'₹'+Math.round(earned).toLocaleString('en-IN'):'₹0'} />
-          <StatCard icon="📋" iconBg="rgba(22,163,74,0.1)"  label="Total Jobs"    value={String(myJobs.length)} change={todayJobs.length+' today'} up={todayJobs.length>0} />
-          <StatCard icon="📩" iconBg="rgba(37,99,235,0.1)"  label="New Requests"  value={String(requests.length)} change={online?'Live':'Go online'} up={online} />
-          <StatCard icon="🔐" iconBg="rgba(217,119,6,0.1)"  label="KYC"           value={kycStatus==='loading'?'...':kycStatus.charAt(0).toUpperCase()+kycStatus.slice(1)} />
+          <StatCard icon="💰" iconBg="rgba(249,115,22,0.1)" label="Total Earned" value={earned>0?'₹'+Math.round(earned).toLocaleString('en-IN'):'₹0'} />
+          <StatCard icon="📋" iconBg="rgba(22,163,74,0.1)"  label="Total Jobs"   value={String(myJobs.length)} change={todayJobs.length+' today'} up={todayJobs.length>0} />
+          <StatCard icon="📩" iconBg="rgba(37,99,235,0.1)"  label="New Requests" value={String(requests.length)} change={online?'Live':'Go online'} up={online} />
+          <StatCard icon="🔐" iconBg="rgba(217,119,6,0.1)"  label="KYC" value={kycStatus==='loading'?'...':kycStatus.charAt(0).toUpperCase()+kycStatus.slice(1)} />
         </div>
 
         <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:18 }}>
@@ -250,19 +260,22 @@ export default function ProviderHome() {
                 {online && <div className="live-dot" style={{ width:6, height:6 }} />}
               </div>
               <div style={{ display:'flex', gap:6 }}>
-                {requests.length>0 && <span className="badge badge-orange">{requests.length} new</span>}
-                <button className="btn btn-ghost btn-sm" onClick={load} title="Refresh">↻</button>
+                {requests.length > 0 && <span className="badge badge-orange">{requests.length} new</span>}
+                <button className="btn btn-ghost btn-sm" onClick={loadAll} title="Refresh">↻</button>
               </div>
             </div>
+
             {loading ? (
               <p style={{ color:'var(--text3)', fontSize:13, textAlign:'center', padding:'20px 0' }}>Loading...</p>
-            ) : requests.length===0 ? (
+            ) : requests.length === 0 ? (
               <div style={{ textAlign:'center', padding:'24px 0' }}>
                 <p style={{ fontSize:28, marginBottom:8 }}>📭</p>
-                <p style={{ fontSize:12, color:'var(--text2)' }}>
-                  {kycStatus!=='verified'?'Get KYC verified to receive requests':!online?'Go online to receive requests':`No pending requests in ${profile?.district}`}
+                <p style={{ fontSize:12, color:'var(--text2)', marginBottom:10 }}>
+                  {kycStatus!=='verified' ? 'Get KYC verified to receive requests'
+                    : !online ? 'Go online to receive requests'
+                    : `No pending requests in ${profile?.district}`}
                 </p>
-                <button className="btn btn-ghost btn-sm" style={{ marginTop:10 }} onClick={load}>↻ Check again</button>
+                <button className="btn btn-outline btn-sm" onClick={loadAll}>↻ Refresh</button>
               </div>
             ) : (
               <div style={{ display:'flex', flexDirection:'column', gap:10 }}>
@@ -270,13 +283,15 @@ export default function ProviderHome() {
                   <div key={r.id} style={{ background:'rgba(249,115,22,0.05)', border:'1.5px solid rgba(249,115,22,0.2)', borderRadius:12, padding:14 }}>
                     <div style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-start', marginBottom:8 }}>
                       <div style={{ display:'flex', gap:8 }}>
-                        <span style={{ fontSize:20 }}>{r.category?.icon??'🔧'}</span>
+                        <span style={{ fontSize:20 }}>{r.category?.icon ?? '🔧'}</span>
                         <div>
                           <p style={{ fontWeight:700, fontSize:13 }}>{r.category?.name}</p>
                           <p style={{ fontSize:11, color:'var(--text2)', marginTop:1 }}>{r.customer?.full_name} · {r.city}</p>
                         </div>
                       </div>
-                      <p style={{ fontWeight:800, fontSize:16, color:'var(--brand)', flexShrink:0 }}>₹{(r.total_amount||0).toLocaleString('en-IN')}</p>
+                      <p style={{ fontWeight:800, fontSize:16, color:'var(--brand)', flexShrink:0 }}>
+                        ₹{(r.total_amount||0).toLocaleString('en-IN')}
+                      </p>
                     </div>
                     {r.customer_notes && (
                       <p style={{ fontSize:11, color:'var(--text2)', background:'var(--bg)', borderRadius:6, padding:'5px 8px', marginBottom:8 }}>
@@ -285,8 +300,8 @@ export default function ProviderHome() {
                     )}
                     <p style={{ fontSize:11, color:'var(--text3)', marginBottom:8 }}>📍 {r.address}, {r.district}</p>
                     <div style={{ display:'flex', gap:6 }}>
-                      <button className="btn btn-success" style={{ flex:2 }} onClick={()=>accept(r.id)}>✓ Accept Job</button>
-                      <button className="btn btn-outline" style={{ flex:1 }} onClick={()=>toast('Declined',{icon:'❌'})}>Decline</button>
+                      <button className="btn btn-success" style={{ flex:2 }} onClick={() => accept(r.id)}>✓ Accept Job</button>
+                      <button className="btn btn-outline" style={{ flex:1 }} onClick={() => toast('Declined', { icon:'❌' })}>Decline</button>
                     </div>
                   </div>
                 ))}
@@ -294,13 +309,13 @@ export default function ProviderHome() {
             )}
           </div>
 
-          {/* Recent jobs */}
+          {/* Recent Jobs */}
           <div className="glass" style={{ padding:20 }}>
             <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:14 }}>
               <h3 style={{ fontWeight:700, fontSize:14 }}>Recent Jobs</h3>
-              <button className="btn btn-ghost btn-sm" onClick={()=>nav('/provider/myjobs')}>View all →</button>
+              <button className="btn btn-ghost btn-sm" onClick={() => nav('/provider/myjobs')}>View all →</button>
             </div>
-            {myJobs.length===0 ? (
+            {myJobs.length === 0 ? (
               <div style={{ textAlign:'center', padding:'24px 0', color:'var(--text3)' }}>
                 <p style={{ fontSize:28, marginBottom:8 }}>📋</p>
                 <p style={{ fontSize:12 }}>No jobs yet. Accept your first request!</p>
@@ -309,7 +324,7 @@ export default function ProviderHome() {
               <div style={{ display:'flex', flexDirection:'column', gap:10 }}>
                 {myJobs.slice(0,5).map((j:any) => (
                   <div key={j.id} style={{ display:'flex', alignItems:'center', gap:10, padding:'8px 0', borderBottom:'1px solid var(--border)' }}>
-                    <div style={{ fontSize:18, width:28, textAlign:'center', flexShrink:0 }}>{j.category?.icon??'🔧'}</div>
+                    <div style={{ fontSize:18, width:28, textAlign:'center', flexShrink:0 }}>{j.category?.icon ?? '🔧'}</div>
                     <div style={{ flex:1, minWidth:0 }}>
                       <p style={{ fontSize:12, fontWeight:600, whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' }}>
                         {j.customer?.full_name} — {j.category?.name}
@@ -319,7 +334,9 @@ export default function ProviderHome() {
                       </p>
                     </div>
                     <div style={{ textAlign:'right', flexShrink:0 }}>
-                      <p style={{ fontSize:12, fontWeight:700, color:'var(--brand)' }}>₹{Math.round((j.total_amount||0)*0.9).toLocaleString('en-IN')}</p>
+                      <p style={{ fontSize:12, fontWeight:700, color:'var(--brand)' }}>
+                        ₹{Math.round((j.total_amount||0)*0.9).toLocaleString('en-IN')}
+                      </p>
                       <StatusBadge status={j.status} />
                     </div>
                   </div>
