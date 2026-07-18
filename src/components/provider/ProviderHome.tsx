@@ -16,116 +16,118 @@ export default function ProviderHome() {
   const [requests,  setRequests]  = useState<any[]>([])
   const [myJobs,    setMyJobs]    = useState<any[]>([])
   const [kycStatus, setKycStatus] = useState<string>('loading')
-  const [notifs,    setNotifs]    = useState<any[]>([])
   const [loading,   setLoading]   = useState(true)
   const first = profile?.full_name?.split(' ')[0] ?? 'Provider'
 
-  // Fetch ALL pending bookings in provider's district (not just their own)
-  async function loadRequests(district: string) {
+  // Load ALL pending bookings in provider's district
+  const loadRequests = useCallback(async () => {
+    if (!profile?.district) return []
     const { data, error } = await supabase
       .from('bookings')
       .select(`
         *,
-        category:service_categories(name,icon),
-        customer:profiles!bookings_customer_id_fkey(full_name,phone)
+        category:service_categories(name, icon),
+        customer:profiles!bookings_customer_id_fkey(full_name, phone)
       `)
       .eq('status', 'pending')
-      .eq('district', district)
+      .ilike('district', profile.district.trim()) // case-insensitive match
       .order('created_at', { ascending: false })
-      .limit(10)
-    if (error) console.error('Requests error:', error)
+      .limit(20)
+    if (error) console.error('Requests load error:', error)
+    console.log('Provider requests for district', profile.district, ':', data?.length ?? 0, data)
     return data ?? []
-  }
+  }, [profile?.district])
 
   const load = useCallback(async () => {
     if (!profile?.id) return
 
-    // Get provider row
-    const { data: provRow } = await supabase
+    // Get own provider row
+    const { data: provRow, error: provErr } = await supabase
       .from('providers')
       .select('kyc_status, is_online')
       .eq('id', profile.id)
       .maybeSingle()
 
-    const ks = provRow?.kyc_status ?? 'pending'
-    const ol = provRow?.is_online  ?? false
-    setKycStatus(ks)
-    setOnline(ol)
+    if (provErr) console.error('Provider row error:', provErr)
+    setKycStatus(provRow?.kyc_status ?? 'pending')
+    setOnline(provRow?.is_online ?? false)
 
-    const district = profile.district || 'Bengaluru Urban'
-
-    // Load in parallel
-    const [reqs, jobs, notifications] = await Promise.all([
-      loadRequests(district),
+    const [reqs, jobs] = await Promise.all([
+      loadRequests(),
       getProviderBookings(profile.id),
-      supabase.from('notifications')
-        .select('*')
-        .eq('user_id', profile.id)
-        .eq('is_read', false)
-        .order('created_at', { ascending: false })
-        .limit(5)
-        .then(r => r.data ?? []),
     ])
-
     setRequests(reqs)
     setMyJobs(jobs)
-    setNotifs(notifications)
     setLoading(false)
-  }, [profile?.id, profile?.district])
+  }, [profile?.id, loadRequests])
 
   useEffect(() => { load() }, [load])
 
-  // Realtime — listen for new bookings in provider's district
+  // Realtime — NO filter on district (filters on non-indexed cols fail silently)
+  // Instead receive ALL booking changes and filter client-side
   useEffect(() => {
-    if (!profile?.id || !profile?.district) return
+    if (!profile?.id) return
 
-    const channel = supabase.channel(`provider-${profile.id}`)
-      // New booking in same district
-      .on('postgres_changes', {
-        event: 'INSERT',
-        schema: 'public',
-        table: 'bookings',
-        filter: `district=eq.${profile.district}`,
-      }, (payload) => {
-        toast('📩 New job request in your area!', { icon: '🔔', duration: 5000 })
-        load() // Reload to get fresh data with joins
-      })
-      // Booking accepted/cancelled by someone else
-      .on('postgres_changes', {
-        event: 'UPDATE',
-        schema: 'public',
-        table: 'bookings',
-      }, () => { load() })
-      // KYC status change
-      .on('postgres_changes', {
-        event: 'UPDATE',
-        schema: 'public',
-        table: 'providers',
-        filter: `id=eq.${profile.id}`,
-      }, (payload: any) => {
-        const newStatus = payload.new?.kyc_status
-        const newOnline = payload.new?.is_online
-        if (newStatus) {
-          setKycStatus(newStatus)
-          if (newStatus === 'verified') toast.success('🎉 Your KYC has been approved! You can now go online.')
-          if (newStatus === 'rejected') toast.error('❌ Your KYC was rejected. Please re-upload documents.')
+    const channel = supabase
+      .channel(`provider-rt-${profile.id}`)
+      .on(
+        'postgres_changes',
+        { event: 'INSERT', schema: 'public', table: 'bookings' },
+        async (payload: any) => {
+          const newBooking = payload.new
+          console.log('New booking received:', newBooking)
+          // Only notify if in same district (case-insensitive)
+          const norm = (s?: string) => (s ?? '').trim().toLowerCase()
+          if (norm(newBooking.district) === norm(profile.district)) {
+            toast('📩 New job request near you!', {
+              icon: '🔔',
+              duration: 6000,
+              style: { fontWeight: 700 },
+            })
+            // Reload requests to get full joined data
+            const reqs = await loadRequests()
+            setRequests(reqs)
+          }
         }
-        if (typeof newOnline === 'boolean') setOnline(newOnline)
+      )
+      .on(
+        'postgres_changes',
+        { event: 'UPDATE', schema: 'public', table: 'bookings' },
+        async () => {
+          const reqs = await loadRequests()
+          setRequests(reqs)
+          const jobs = await getProviderBookings(profile.id)
+          setMyJobs(jobs)
+        }
+      )
+      .on(
+        'postgres_changes',
+        { event: 'UPDATE', schema: 'public', table: 'providers',
+          filter: `id=eq.${profile.id}` },
+        (payload: any) => {
+          const { kyc_status: ks, is_online: io } = payload.new ?? {}
+          if (ks) {
+            setKycStatus(ks)
+            if (ks === 'verified') toast.success('🎉 KYC Approved! You can now go online.')
+            if (ks === 'rejected') toast.error('❌ KYC Rejected. Re-upload documents.')
+          }
+          if (typeof io === 'boolean') setOnline(io)
+        }
+      )
+      .on(
+        'postgres_changes',
+        { event: 'INSERT', schema: 'public', table: 'notifications',
+          filter: `user_id=eq.${profile.id}` },
+        (payload: any) => {
+          toast(payload.new?.title ?? 'New notification', { icon: '🔔' })
+        }
+      )
+      .subscribe((status) => {
+        console.log('Realtime channel status:', status)
       })
-      // New notification
-      .on('postgres_changes', {
-        event: 'INSERT',
-        schema: 'public',
-        table: 'notifications',
-        filter: `user_id=eq.${profile.id}`,
-      }, (payload: any) => {
-        toast(payload.new?.title ?? 'New notification', { icon: '🔔' })
-        setNotifs(prev => [payload.new, ...prev].slice(0, 5))
-      })
-      .subscribe()
 
     return () => { supabase.removeChannel(channel) }
-  }, [profile?.id, profile?.district, load])
+  }, [profile?.id, profile?.district, loadRequests])
 
   async function toggleOnline() {
     if (!profile?.id) return
@@ -142,7 +144,7 @@ export default function ProviderHome() {
         .upsert({ id: profile.id, is_online: next }, { onConflict: 'id' })
       if (error) throw error
       setOnline(next)
-      toast.success(next ? '🟢 You are Online! Receiving job requests.' : '⚫ You are Offline.')
+      toast.success(next ? '🟢 Online! Receiving requests.' : '⚫ Offline.')
     } catch (err: any) {
       toast.error('Failed: ' + err.message)
     } finally {
@@ -155,18 +157,14 @@ export default function ProviderHome() {
     try {
       await acceptBooking(bookingId, profile.id)
       setRequests(prev => prev.filter(r => r.id !== bookingId))
-      toast.success('✅ Job accepted! Navigate to customer location.')
-      load()
-    } catch { toast.error('Failed to accept — may have been taken') }
+      toast.success('✅ Job accepted!')
+      const jobs = await getProviderBookings(profile.id)
+      setMyJobs(jobs)
+    } catch { toast.error('Failed — booking may have been taken') }
   }
 
-  async function markNotifRead(id: string) {
-    await supabase.from('notifications').update({ is_read: true }).eq('id', id)
-    setNotifs(prev => prev.filter(n => n.id !== id))
-  }
-
-  const earned    = myJobs.filter(j => j.status==='completed').reduce((s,j) => s+(j.total_amount||0)*0.9, 0)
-  const todayJobs = myJobs.filter(j => new Date(j.created_at).toDateString() === new Date().toDateString())
+  const earned    = myJobs.filter(j=>j.status==='completed').reduce((s,j)=>s+(j.total_amount||0)*0.9, 0)
+  const todayJobs = myJobs.filter(j=>new Date(j.created_at).toDateString()===new Date().toDateString())
 
   return (
     <div>
@@ -175,26 +173,17 @@ export default function ProviderHome() {
         subtitle={`${profile?.district || 'Karnataka'} · Provider Dashboard`}
         action={
           <div style={{ display:'flex', gap:10, alignItems:'center' }}>
-            {notifs.length > 0 && (
-              <div style={{ position:'relative' }}>
-                <button className="btn btn-outline btn-sm" onClick={() => nav('/provider/notifications')}>
-                  🔔 {notifs.length}
-                </button>
-              </div>
-            )}
             <span style={{
               fontSize:11, fontWeight:700, padding:'4px 10px', borderRadius:20,
               background: kycStatus==='verified'?'rgba(22,163,74,0.1)':kycStatus==='submitted'?'rgba(37,99,235,0.1)':'rgba(217,119,6,0.1)',
-              color:      kycStatus==='verified'?'#16a34a':kycStatus==='submitted'?'#2563eb':'#d97706',
+              color: kycStatus==='verified'?'#16a34a':kycStatus==='submitted'?'#2563eb':'#d97706',
               border:`1px solid ${kycStatus==='verified'?'rgba(22,163,74,0.3)':kycStatus==='submitted'?'rgba(37,99,235,0.3)':'rgba(217,119,6,0.3)'}`,
               textTransform:'capitalize' as const,
-            }}>
-              KYC: {kycStatus==='loading'?'...':kycStatus}
-            </span>
+            }}>KYC: {kycStatus==='loading'?'...':kycStatus}</span>
             <button
               onClick={toggleOnline}
-              disabled={toggling || kycStatus !== 'verified'}
-              title={kycStatus !== 'verified' ? 'Complete KYC first' : undefined}
+              disabled={toggling || kycStatus!=='verified'}
+              title={kycStatus!=='verified'?'Complete KYC first':undefined}
               style={{
                 display:'flex', alignItems:'center', gap:10, padding:'9px 18px', borderRadius:10,
                 border:`1.5px solid ${online?'rgba(22,163,74,0.4)':'var(--border)'}`,
@@ -214,48 +203,32 @@ export default function ProviderHome() {
       />
       <div className="page-content">
 
-        {/* Notifications */}
-        {notifs.length > 0 && (
-          <div style={{ marginBottom:18 }}>
-            {notifs.map(n => (
-              <div key={n.id} style={{ background:'rgba(249,115,22,0.06)', border:'1px solid rgba(249,115,22,0.2)', borderRadius:10, padding:'12px 16px', display:'flex', gap:12, alignItems:'center', marginBottom:8 }}>
-                <span style={{ fontSize:18, flexShrink:0 }}>🔔</span>
-                <div style={{ flex:1 }}>
-                  <p style={{ fontWeight:700, fontSize:13 }}>{n.title}</p>
-                  <p style={{ fontSize:12, color:'var(--text2)', marginTop:2 }}>{n.body}</p>
-                </div>
-                <button className="btn btn-ghost btn-sm" onClick={() => markNotifRead(n.id)}>✕</button>
-              </div>
-            ))}
-          </div>
-        )}
-
         {/* KYC banners */}
-        {kycStatus === 'pending' && (
+        {kycStatus==='pending' && (
           <div style={{ background:'rgba(217,119,6,0.06)', border:'1px solid rgba(217,119,6,0.2)', borderRadius:12, padding:'14px 18px', display:'flex', gap:12, alignItems:'center', marginBottom:18 }}>
             <span style={{ fontSize:20 }}>⚠️</span>
             <div style={{ flex:1 }}>
               <p style={{ fontWeight:700, fontSize:13, color:'#d97706' }}>KYC Verification Required</p>
               <p style={{ fontSize:12, color:'var(--text2)', marginTop:2 }}>Upload your documents to get verified and start receiving bookings.</p>
             </div>
-            <button className="btn btn-sm" style={{ flexShrink:0, background:'rgba(217,119,6,0.1)', color:'#d97706', border:'1px solid rgba(217,119,6,0.3)' }} onClick={() => nav('/provider/kyc')}>Upload →</button>
+            <button className="btn btn-sm" style={{ flexShrink:0, background:'rgba(217,119,6,0.1)', color:'#d97706', border:'1px solid rgba(217,119,6,0.3)' }} onClick={()=>nav('/provider/kyc')}>Upload →</button>
           </div>
         )}
-        {kycStatus === 'submitted' && (
+        {kycStatus==='submitted' && (
           <div style={{ background:'rgba(37,99,235,0.06)', border:'1px solid rgba(37,99,235,0.2)', borderRadius:12, padding:'14px 18px', display:'flex', gap:12, alignItems:'center', marginBottom:18 }}>
             <span style={{ fontSize:20 }}>⏳</span>
             <div>
               <p style={{ fontWeight:700, fontSize:13, color:'#2563eb' }}>KYC Under Review</p>
-              <p style={{ fontSize:12, color:'var(--text2)', marginTop:2 }}>Admin will approve within 24 hours. You'll be notified instantly.</p>
+              <p style={{ fontSize:12, color:'var(--text2)', marginTop:2 }}>Admin will approve within 24 hours. You will be notified instantly.</p>
             </div>
           </div>
         )}
-        {kycStatus === 'verified' && !online && (
+        {kycStatus==='verified' && !online && (
           <div style={{ background:'rgba(22,163,74,0.06)', border:'1px solid rgba(22,163,74,0.2)', borderRadius:12, padding:'14px 18px', display:'flex', gap:12, alignItems:'center', marginBottom:18 }}>
             <span style={{ fontSize:20 }}>✅</span>
             <div style={{ flex:1 }}>
-              <p style={{ fontWeight:700, fontSize:13, color:'#16a34a' }}>KYC Verified! Toggle Online to start receiving bookings</p>
-              <p style={{ fontSize:12, color:'var(--text2)', marginTop:2 }}>Use the Online button above to receive job requests in {profile?.district}.</p>
+              <p style={{ fontWeight:700, fontSize:13, color:'#16a34a' }}>KYC Verified! Toggle Online to receive bookings</p>
+              <p style={{ fontSize:12, color:'var(--text2)', marginTop:2 }}>Toggle Online above to start receiving requests in {profile?.district}.</p>
             </div>
           </div>
         )}
@@ -265,20 +238,20 @@ export default function ProviderHome() {
           <StatCard icon="💰" iconBg="rgba(249,115,22,0.1)" label="Total Earned"  value={earned>0?'₹'+Math.round(earned).toLocaleString('en-IN'):'₹0'} />
           <StatCard icon="📋" iconBg="rgba(22,163,74,0.1)"  label="Total Jobs"    value={String(myJobs.length)} change={todayJobs.length+' today'} up={todayJobs.length>0} />
           <StatCard icon="📩" iconBg="rgba(37,99,235,0.1)"  label="New Requests"  value={String(requests.length)} change={online?'Live':'Go online'} up={online} />
-          <StatCard icon="🔐" iconBg="rgba(217,119,6,0.1)"  label="KYC Status"    value={kycStatus==='loading'?'...':kycStatus.charAt(0).toUpperCase()+kycStatus.slice(1)} />
+          <StatCard icon="🔐" iconBg="rgba(217,119,6,0.1)"  label="KYC"           value={kycStatus==='loading'?'...':kycStatus.charAt(0).toUpperCase()+kycStatus.slice(1)} />
         </div>
 
         <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:18 }}>
-          {/* Live job requests */}
+          {/* Job Requests */}
           <div className="glass" style={{ padding:20 }}>
             <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:14 }}>
               <div style={{ display:'flex', alignItems:'center', gap:8 }}>
                 <h3 style={{ fontWeight:700, fontSize:14 }}>Job Requests</h3>
                 {online && <div className="live-dot" style={{ width:6, height:6 }} />}
               </div>
-              <div style={{ display:'flex', gap:8 }}>
+              <div style={{ display:'flex', gap:6 }}>
                 {requests.length>0 && <span className="badge badge-orange">{requests.length} new</span>}
-                <button className="btn btn-ghost btn-sm" onClick={load}>↻</button>
+                <button className="btn btn-ghost btn-sm" onClick={load} title="Refresh">↻</button>
               </div>
             </div>
             {loading ? (
@@ -287,8 +260,9 @@ export default function ProviderHome() {
               <div style={{ textAlign:'center', padding:'24px 0' }}>
                 <p style={{ fontSize:28, marginBottom:8 }}>📭</p>
                 <p style={{ fontSize:12, color:'var(--text2)' }}>
-                  {kycStatus!=='verified'?'Get KYC verified first':!online?'Go online to receive requests':`No requests in ${profile?.district} right now`}
+                  {kycStatus!=='verified'?'Get KYC verified to receive requests':!online?'Go online to receive requests':`No pending requests in ${profile?.district}`}
                 </p>
+                <button className="btn btn-ghost btn-sm" style={{ marginTop:10 }} onClick={load}>↻ Check again</button>
               </div>
             ) : (
               <div style={{ display:'flex', flexDirection:'column', gap:10 }}>
@@ -302,15 +276,17 @@ export default function ProviderHome() {
                           <p style={{ fontSize:11, color:'var(--text2)', marginTop:1 }}>{r.customer?.full_name} · {r.city}</p>
                         </div>
                       </div>
-                      <p style={{ fontWeight:800, fontSize:16, color:'var(--brand)' }}>₹{(r.total_amount||0).toLocaleString('en-IN')}</p>
+                      <p style={{ fontWeight:800, fontSize:16, color:'var(--brand)', flexShrink:0 }}>₹{(r.total_amount||0).toLocaleString('en-IN')}</p>
                     </div>
                     {r.customer_notes && (
-                      <p style={{ fontSize:11, color:'var(--text2)', background:'var(--bg2)', borderRadius:6, padding:'5px 8px', marginBottom:8 }}>💬 {r.customer_notes}</p>
+                      <p style={{ fontSize:11, color:'var(--text2)', background:'var(--bg)', borderRadius:6, padding:'5px 8px', marginBottom:8 }}>
+                        💬 {r.customer_notes}
+                      </p>
                     )}
-                    <p style={{ fontSize:11, color:'var(--text3)', marginBottom:8 }}>📍 {r.address}</p>
+                    <p style={{ fontSize:11, color:'var(--text3)', marginBottom:8 }}>📍 {r.address}, {r.district}</p>
                     <div style={{ display:'flex', gap:6 }}>
-                      <button className="btn btn-success btn-sm" style={{ flex:1 }} onClick={()=>accept(r.id)}>✓ Accept</button>
-                      <button className="btn btn-outline btn-sm" style={{ flex:1 }} onClick={()=>toast('Declined',{icon:'❌'})}>Decline</button>
+                      <button className="btn btn-success" style={{ flex:2 }} onClick={()=>accept(r.id)}>✓ Accept Job</button>
+                      <button className="btn btn-outline" style={{ flex:1 }} onClick={()=>toast('Declined',{icon:'❌'})}>Decline</button>
                     </div>
                   </div>
                 ))}
@@ -327,7 +303,7 @@ export default function ProviderHome() {
             {myJobs.length===0 ? (
               <div style={{ textAlign:'center', padding:'24px 0', color:'var(--text3)' }}>
                 <p style={{ fontSize:28, marginBottom:8 }}>📋</p>
-                <p style={{ fontSize:12 }}>Accept your first job request!</p>
+                <p style={{ fontSize:12 }}>No jobs yet. Accept your first request!</p>
               </div>
             ) : (
               <div style={{ display:'flex', flexDirection:'column', gap:10 }}>
