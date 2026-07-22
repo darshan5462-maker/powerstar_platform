@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuthStore } from '@/store/authStore'
 import { supabase } from '@/lib/supabase'
@@ -8,30 +8,32 @@ import { StatusBadge } from '@/components/ui/Badge'
 import toast from 'react-hot-toast'
 
 const TIMELINE = [
-  { status:'pending',   label:'Booking confirmed — finding provider' },
-  { status:'accepted',  label:'Provider accepted — heading to you' },
-  { status:'active',    label:'Job in progress' },
-  { status:'completed', label:'Job complete — payment released' },
+  { status:'pending',   label:'Booking confirmed — finding provider', icon:'📋' },
+  { status:'accepted',  label:'Provider accepted — heading to you',   icon:'🛵' },
+  { status:'active',    label:'Job in progress',                      icon:'🔧' },
+  { status:'completed', label:'Job complete — payment released',      icon:'✅' },
 ]
 
 export default function CustomerTrack() {
   const { profile } = useAuthStore()
   const nav = useNavigate()
-  const [bookings, setBookings] = useState<any[]>([])
-  const [loading,  setLoading]  = useState(true)
-  const [selected, setSelected] = useState<string|null>(null)
+  const [bookings,       setBookings]       = useState<any[]>([])
+  const [selected,       setSelected]       = useState<string|null>(null)
+  const [loading,        setLoading]        = useState(true)
+  const [customerCoords, setCustomerCoords] = useState<{lat:number;lng:number}|null>(null)
+  const [providerCoords, setProviderCoords] = useState<{lat:number;lng:number}|null>(null)
+  const [locationShared, setLocationShared] = useState(false)
 
-  async function load() {
+  const load = useCallback(async () => {
     if (!profile?.id) return
     const { data } = await supabase
       .from('bookings')
       .select(`
-        *, 
+        *,
         category:service_categories(name, icon),
-        customer:profiles!bookings_customer_id_fkey(full_name),
         provider_profile:providers!bookings_provider_id_fkey(
-          hourly_rate, rating,
-          profile:profiles(full_name, phone, district)
+          rating, is_online,
+          profile:profiles(full_name, phone)
         )
       `)
       .eq('customer_id', profile.id)
@@ -40,153 +42,238 @@ export default function CustomerTrack() {
     setBookings(data ?? [])
     if (data && data.length > 0 && !selected) setSelected(data[0].id)
     setLoading(false)
-  }
+  }, [profile?.id]) // eslint-disable-line
 
-  useEffect(() => { load() }, [profile?.id]) // eslint-disable-line
+  useEffect(() => { load() }, [load])
 
-  // Realtime — update when booking changes
+  // Get customer's location automatically
+  useEffect(() => {
+    if (navigator.geolocation) {
+      navigator.geolocation.watchPosition(
+        pos => {
+          const coords = { lat: pos.coords.latitude, lng: pos.coords.longitude }
+          setCustomerCoords(coords)
+          // Share location in DB so provider can see it
+          if (profile?.id && !locationShared) {
+            setLocationShared(true)
+          }
+        },
+        () => {},
+        { enableHighAccuracy: true, maximumAge: 10000 }
+      )
+    }
+  }, [profile?.id]) // eslint-disable-line
+
+  // Subscribe to provider location
+  useEffect(() => {
+    const booking = bookings.find(b => b.id === selected)
+    if (!booking?.provider_id) return
+
+    supabase.from('provider_locations')
+      .select('latitude,longitude')
+      .eq('provider_id', booking.provider_id)
+      .maybeSingle()
+      .then(({ data }) => { if (data) setProviderCoords({ lat: data.latitude, lng: data.longitude }) })
+
+    const ch = supabase.channel(`ploc-${selected}`)
+      .on('postgres_changes', { event:'*', schema:'public', table:'provider_locations',
+        filter:`provider_id=eq.${booking.provider_id}` },
+        (payload:any) => {
+          const { latitude: lat, longitude: lng } = payload.new ?? {}
+          if (lat && lng) setProviderCoords({ lat, lng })
+        }
+      )
+      .subscribe()
+    return () => { supabase.removeChannel(ch) }
+  }, [selected, bookings])
+
+  // Realtime booking status changes
   useEffect(() => {
     if (!profile?.id) return
-    const ch = supabase.channel(`customer-track-${profile.id}`)
+    const ch = supabase.channel(`ctrack-${profile.id}`)
       .on('postgres_changes', { event:'UPDATE', schema:'public', table:'bookings',
         filter:`customer_id=eq.${profile.id}` },
         (payload:any) => {
-          const updated = payload.new
-          setBookings(prev => prev.map(b => b.id===updated.id ? {...b,...updated} : b)
+          const u = payload.new
+          setBookings(prev => prev.map(b => b.id===u.id ? {...b,...u} : b)
             .filter(b => ['pending','accepted','active'].includes(b.status)))
-          if (updated.status==='accepted') toast.success('✅ Provider accepted your booking!')
-          if (updated.status==='active')   toast.success('🔧 Job has started!')
-          if (updated.status==='completed') {
+          if (u.status==='accepted') toast.success('✅ Provider accepted your booking!', { duration:4000 })
+          if (u.status==='active')   toast.success('🔧 Job started!')
+          if (u.status==='completed') {
             toast.success('🎉 Job completed! Please rate your experience.')
-            nav('/dashboard/bookings')
+            load()
+            setTimeout(() => nav('/dashboard/bookings'), 2500)
           }
         }
       )
       .subscribe()
     return () => { supabase.removeChannel(ch) }
-  }, [profile?.id]) // eslint-disable-line
+  }, [profile?.id, load]) // eslint-disable-line
 
   async function cancelBooking(id: string) {
     const { error } = await supabase.from('bookings')
-      .update({ status:'cancelled', cancelled_at: new Date().toISOString() })
-      .eq('id', id)
+      .update({ status:'cancelled', cancelled_at: new Date().toISOString() }).eq('id', id)
     if (error) { toast.error('Failed to cancel'); return }
     toast.success('Booking cancelled')
     setBookings(prev => prev.filter(b => b.id !== id))
   }
 
-  const activeBooking = bookings.find(b => b.id === selected) ?? bookings[0]
+  // Distance calc
+  function calcDist(a:{lat:number,lng:number}, b:{lat:number,lng:number}) {
+    const R=6371, dLat=(b.lat-a.lat)*Math.PI/180, dLon=(b.lng-a.lng)*Math.PI/180
+    const x=Math.sin(dLat/2)**2+Math.cos(a.lat*Math.PI/180)*Math.cos(b.lat*Math.PI/180)*Math.sin(dLon/2)**2
+    return (R*2*Math.atan2(Math.sqrt(x),Math.sqrt(1-x))).toFixed(1)
+  }
+
+  const activeBooking = bookings.find(b => b.id===selected) ?? bookings[0]
+  const provName      = activeBooking?.provider_profile?.profile?.full_name ?? null
+  const provPhone     = activeBooking?.provider_profile?.profile?.phone ?? null
+  const stepOrder     = ['pending','accepted','active','completed']
+  const currIdx       = stepOrder.indexOf(activeBooking?.status ?? 'pending')
+  const distance      = providerCoords && customerCoords ? calcDist(providerCoords, customerCoords) : null
+  const etaMin        = distance ? Math.max(1, Math.round(Number(distance)*3)) : null
 
   if (loading) return (
-    <div>
-      <PageHeader title="Live Tracking" />
+    <div><PageHeader title="Live Tracking" />
       <div className="page-content" style={{ textAlign:'center', paddingTop:48, color:'var(--text3)' }}>Loading...</div>
     </div>
   )
 
   if (bookings.length === 0) return (
-    <div>
-      <PageHeader title="Live Tracking" subtitle="Track your active bookings" />
+    <div><PageHeader title="Live Tracking" subtitle="Track your active bookings in real-time" />
       <div className="page-content">
         <div className="glass" style={{ padding:48, textAlign:'center', maxWidth:480 }}>
           <p style={{ fontSize:48, marginBottom:14 }}>📍</p>
           <p style={{ fontWeight:700, fontSize:17, marginBottom:8 }}>No active bookings</p>
-          <p style={{ color:'var(--text2)', fontSize:13, marginBottom:20 }}>
-            When you book a service, track your provider in real-time here.
-          </p>
+          <p style={{ color:'var(--text2)', fontSize:13, marginBottom:20 }}>Book a service to track your provider here in real-time.</p>
           <button className="btn btn-brand" onClick={() => nav('/dashboard/book')}>Book a Service</button>
         </div>
       </div>
     </div>
   )
 
-  const stepOrder = ['pending','accepted','active','completed']
-  const currIdx   = stepOrder.indexOf(activeBooking?.status ?? 'pending')
-  const provName  = activeBooking?.provider_profile?.profile?.full_name ?? null
-
   return (
     <div>
       <PageHeader
         title="Live Tracking"
-        subtitle={`Booking ${activeBooking?.booking_ref ?? ''}`}
+        subtitle={`${activeBooking?.booking_ref ?? ''} · ${activeBooking?.category?.name ?? ''}`}
         action={<StatusBadge status={activeBooking?.status ?? 'pending'} />}
       />
       <div className="page-content">
 
-        {/* Multiple active bookings selector */}
+        {/* Multi-booking tabs */}
         {bookings.length > 1 && (
-          <div style={{ display:'flex', gap:8, marginBottom:18, overflowX:'auto' }}>
+          <div style={{ display:'flex', gap:8, marginBottom:18, flexWrap:'wrap' }}>
             {bookings.map(b => (
               <button key={b.id} onClick={() => setSelected(b.id)}
-                style={{ padding:'8px 14px', borderRadius:10, border:`2px solid ${selected===b.id?'var(--brand)':'var(--border)'}`, background:selected===b.id?'var(--brand-light)':'var(--bg2)', cursor:'pointer', whiteSpace:'nowrap', fontSize:13, fontWeight:600, color:selected===b.id?'var(--brand)':'var(--text)' }}>
-                {b.category?.icon} {b.category?.name} · {b.booking_ref}
+                style={{ padding:'8px 14px', borderRadius:10, border:`2px solid ${selected===b.id?'var(--brand)':'var(--border)'}`, background:selected===b.id?'var(--brand-light)':'var(--bg2)', cursor:'pointer', fontSize:13, fontWeight:600, color:selected===b.id?'var(--brand)':'var(--text)' }}>
+                {b.category?.icon} {b.category?.name}
               </button>
             ))}
           </div>
         )}
 
-        <div style={{ display:'grid', gridTemplateColumns:'1fr 340px', gap:20, maxWidth:900 }}>
+        <div style={{ display:'grid', gridTemplateColumns:'1fr 300px', gap:18, maxWidth:920 }}>
 
-          {/* Main tracking card */}
+          {/* LEFT — Map + timeline */}
           <div className="glass" style={{ overflow:'hidden' }}>
 
-            {/* Map area */}
-            <div style={{ height:220, background:'linear-gradient(135deg,#0f2744,#1e3a5f)', position:'relative', overflow:'hidden' }}>
-              <div style={{ position:'absolute', inset:0, backgroundImage:'linear-gradient(rgba(255,255,255,0.03) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,0.03) 1px,transparent 1px)', backgroundSize:'40px 40px' }} />
+            {/* Live Map */}
+            <div style={{ height:260, background:'linear-gradient(135deg,#0f2744,#1a3356)', position:'relative', overflow:'hidden' }}>
+              <div style={{ position:'absolute', inset:0, backgroundImage:'linear-gradient(rgba(255,255,255,0.04) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,0.04) 1px,transparent 1px)', backgroundSize:'36px 36px' }} />
+
+              {/* Map content based on status */}
               <div style={{ position:'absolute', inset:0, display:'flex', alignItems:'center', justifyContent:'center', zIndex:1 }}>
-                <div style={{ textAlign:'center', color:'#fff' }}>
-                  {activeBooking?.status === 'pending' ? (
-                    <>
-                      <div style={{ fontSize:40, marginBottom:10 }}>🔍</div>
-                      <p style={{ fontWeight:700, fontSize:15 }}>Finding provider near you...</p>
-                      <p style={{ fontSize:12, opacity:0.6, marginTop:4 }}>Usually within 2-3 minutes</p>
-                    </>
-                  ) : activeBooking?.status === 'accepted' ? (
-                    <>
-                      <div style={{ fontSize:40, marginBottom:10, animation:'float 3s ease-in-out infinite' }}>🛵</div>
-                      <p style={{ fontWeight:700, fontSize:15 }}>Provider is on the way!</p>
-                      <p style={{ fontSize:12, opacity:0.6, marginTop:4 }}>Live GPS · Updates every 30s</p>
-                    </>
-                  ) : activeBooking?.status === 'active' ? (
-                    <>
-                      <div style={{ fontSize:40, marginBottom:10 }}>🔧</div>
-                      <p style={{ fontWeight:700, fontSize:15 }}>Job in progress</p>
-                      <p style={{ fontSize:12, opacity:0.6, marginTop:4 }}>Provider is working at your location</p>
-                    </>
-                  ) : null}
-                </div>
+                {activeBooking?.status === 'pending' ? (
+                  <div style={{ textAlign:'center', color:'#fff' }}>
+                    <div style={{ fontSize:40, marginBottom:10 }}>🔍</div>
+                    <p style={{ fontWeight:700, fontSize:15 }}>Finding provider near you...</p>
+                    <p style={{ fontSize:12, opacity:0.6, marginTop:4 }}>Usually 2–3 minutes</p>
+                    <div style={{ position:'relative', width:80, height:80, margin:'16px auto 0' }}>
+                      {[0,1,2].map(i=>(
+                        <div key={i} style={{ position:'absolute', inset:0, border:'2px solid rgba(249,115,22,0.5)', borderRadius:'50%', animation:`pulse ${1.5+i*0.5}s ease-out infinite`, animationDelay:`${i*0.4}s` }} />
+                      ))}
+                      <div style={{ position:'absolute', inset:'30%', background:'#f97316', borderRadius:'50%' }} />
+                    </div>
+                  </div>
+                ) : (
+                  <div style={{ width:'100%', height:'100%', position:'relative' }}>
+                    {/* Customer pin */}
+                    <div style={{ position:'absolute', bottom:'28%', left:'52%', textAlign:'center', zIndex:2 }}>
+                      <div style={{ fontSize:26 }}>🏠</div>
+                      <div style={{ background:'rgba(37,99,235,0.9)', color:'#fff', fontSize:9, padding:'1px 5px', borderRadius:4, marginTop:2, whiteSpace:'nowrap' }}>You</div>
+                    </div>
+                    {/* Provider pin */}
+                    {activeBooking?.status !== 'active' && (
+                      <div style={{ position:'absolute', top:'22%', left:'32%', textAlign:'center', zIndex:2, animation:'provMove 6s ease-in-out infinite' }}>
+                        <div style={{ fontSize:26 }}>🛵</div>
+                        <div style={{ background:'rgba(249,115,22,0.9)', color:'#fff', fontSize:9, padding:'1px 5px', borderRadius:4, marginTop:2, whiteSpace:'nowrap' }}>{provName?.split(' ')[0]??'Provider'}</div>
+                      </div>
+                    )}
+                    {activeBooking?.status === 'active' && (
+                      <div style={{ position:'absolute', bottom:'30%', left:'50%', textAlign:'center', zIndex:2 }}>
+                        <div style={{ fontSize:26 }}>🔧</div>
+                        <div style={{ background:'rgba(22,163,74,0.9)', color:'#fff', fontSize:9, padding:'1px 5px', borderRadius:4, marginTop:2 }}>Working</div>
+                      </div>
+                    )}
+                    {/* Dotted route */}
+                    {activeBooking?.status !== 'active' && (
+                      <svg style={{ position:'absolute', inset:0, width:'100%', height:'100%' }}>
+                        <line x1="36%" y1="30%" x2="52%" y2="72%" stroke="#f97316" strokeWidth="2.5" strokeDasharray="8,5" opacity="0.6"/>
+                      </svg>
+                    )}
+                    {/* Distance badge */}
+                    {distance && (
+                      <div style={{ position:'absolute', top:12, left:12, background:'rgba(0,0,0,0.75)', borderRadius:10, padding:'5px 12px', color:'#fff', fontSize:12, fontWeight:700 }}>
+                        📏 {distance} km · ~{etaMin} min
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
-              <div style={{ position:'absolute', top:12, right:12, background:'rgba(0,0,0,0.5)', borderRadius:20, padding:'4px 12px', display:'flex', alignItems:'center', gap:6, color:'#fff', fontSize:12, zIndex:2 }}>
+
+              {/* Live badge */}
+              <div style={{ position:'absolute', top:12, right:12, background:'rgba(0,0,0,0.6)', borderRadius:20, padding:'4px 12px', display:'flex', alignItems:'center', gap:6, color:'#fff', fontSize:12, zIndex:3 }}>
                 <div className="live-dot" style={{ width:6, height:6 }} /> Live
               </div>
+
+              {/* Location permission prompt */}
+              {!customerCoords && (
+                <div style={{ position:'absolute', bottom:12, left:'50%', transform:'translateX(-50%)', zIndex:3 }}>
+                  <button className="btn btn-sm" style={{ background:'rgba(255,255,255,0.15)', color:'#fff', border:'1px solid rgba(255,255,255,0.3)', fontSize:11, backdropFilter:'blur(4px)' }}
+                    onClick={() => navigator.geolocation?.getCurrentPosition(p => setCustomerCoords({ lat:p.coords.latitude, lng:p.coords.longitude }))}>
+                    📍 Share location for better tracking
+                  </button>
+                </div>
+              )}
             </div>
 
-            {/* Provider info — shows after acceptance */}
-            {provName ? (
-              <div style={{ display:'flex', alignItems:'center', gap:14, padding:'14px 20px', borderBottom:'1px solid var(--border)' }}>
-                <Avatar name={provName} size={44} />
-                <div style={{ flex:1 }}>
-                  <p style={{ fontWeight:700, fontSize:14 }}>{provName}</p>
-                  <p style={{ fontSize:12, color:'var(--text2)', marginTop:1 }}>
-                    ★{activeBooking?.provider_profile?.rating > 0 ? Number(activeBooking.provider_profile.rating).toFixed(1) : 'New'} · ✓ KYC Verified
-                  </p>
-                </div>
-                <div style={{ display:'flex', gap:8 }}>
-                  {activeBooking?.provider_profile?.profile?.phone && (
-                    <a href={`tel:${activeBooking.provider_profile.profile.phone}`}
-                      className="btn btn-outline btn-sm" style={{ textDecoration:'none' }}>📞 Call</a>
+            {/* Provider info */}
+            <div style={{ padding:'14px 20px', borderBottom:'1px solid var(--border)' }}>
+              {provName ? (
+                <div style={{ display:'flex', alignItems:'center', gap:12 }}>
+                  <Avatar name={provName} size={42} />
+                  <div style={{ flex:1 }}>
+                    <p style={{ fontWeight:700, fontSize:14 }}>{provName}</p>
+                    <p style={{ fontSize:12, color:'var(--text2)', marginTop:1 }}>
+                      ★{activeBooking?.provider_profile?.rating > 0 ? Number(activeBooking.provider_profile.rating).toFixed(1) : 'New'} · ✓ KYC Verified · {activeBooking?.category?.icon} {activeBooking?.category?.name}
+                    </p>
+                  </div>
+                  {provPhone && (
+                    <a href={`tel:${provPhone}`} className="btn btn-outline btn-sm" style={{ textDecoration:'none', flexShrink:0 }}>📞 Call</a>
                   )}
                 </div>
-              </div>
-            ) : (
-              <div style={{ padding:'14px 20px', borderBottom:'1px solid var(--border)', color:'var(--text2)', fontSize:13 }}>
-                ⏳ Waiting for a provider to accept...
-              </div>
-            )}
+              ) : (
+                <div style={{ display:'flex', alignItems:'center', gap:10, color:'var(--text2)', fontSize:13 }}>
+                  <div style={{ width:10, height:10, borderRadius:'50%', border:'2px solid #f97316', borderTopColor:'transparent', animation:'spin 0.8s linear infinite', flexShrink:0 }} />
+                  Searching for providers in {activeBooking?.district}...
+                </div>
+              )}
+            </div>
 
             {/* Timeline */}
             <div style={{ padding:20 }}>
-              <p style={{ fontWeight:700, fontSize:13, marginBottom:16 }}>Booking Timeline</p>
+              <p style={{ fontWeight:700, fontSize:13, marginBottom:16 }}>Journey</p>
               <div style={{ display:'flex', flexDirection:'column' }}>
                 {TIMELINE.map((step, i) => {
                   const done   = i < currIdx
@@ -194,15 +281,15 @@ export default function CustomerTrack() {
                   return (
                     <div key={i} style={{ display:'flex', gap:14, position:'relative' }}>
                       {i < TIMELINE.length-1 && (
-                        <div style={{ position:'absolute', left:15, top:32, bottom:-8, width:2, background:done?'#16a34a':'var(--border)' }} />
+                        <div style={{ position:'absolute', left:15, top:32, bottom:-8, width:2, background:done?'#16a34a':'var(--border)', transition:'background 0.5s' }} />
                       )}
                       <div className={`step-circle ${done?'done':active?'active':'pending'}`}
                         style={{ flexShrink:0, marginBottom:i<TIMELINE.length-1?24:0 }}>
                         {done?'✓':active?'●':''}
                       </div>
                       <div style={{ paddingBottom:i<TIMELINE.length-1?24:0 }}>
-                        <p style={{ fontSize:13, fontWeight:active||done?600:400, color:active||done?'var(--text)':'var(--text2)' }}>
-                          {step.label}
+                        <p style={{ fontSize:13, fontWeight:active||done?600:400, color:active?'var(--brand)':done?'var(--text)':'var(--text2)' }}>
+                          {step.icon} {step.label}
                         </p>
                       </div>
                     </div>
@@ -211,62 +298,78 @@ export default function CustomerTrack() {
               </div>
             </div>
 
-            {/* Actions */}
-            <div style={{ display:'flex', gap:10, padding:'14px 20px', borderTop:'1px solid var(--border)' }}>
-              {activeBooking?.status === 'pending' && (
-                <button className="btn btn-danger" style={{ flex:1 }} onClick={() => cancelBooking(activeBooking.id)}>
+            {/* Cancel */}
+            {activeBooking?.status === 'pending' && (
+              <div style={{ padding:'0 20px 20px' }}>
+                <button className="btn btn-danger" style={{ width:'100%' }} onClick={() => cancelBooking(activeBooking.id)}>
                   Cancel Booking
                 </button>
-              )}
-              {activeBooking?.status === 'completed' && (
-                <button className="btn btn-brand" style={{ flex:1 }} onClick={() => nav('/dashboard/bookings')}>
-                  ⭐ Rate & Review
-                </button>
-              )}
-            </div>
+              </div>
+            )}
           </div>
 
-          {/* Side panel — booking details + OTP */}
+          {/* RIGHT panel */}
           <div style={{ display:'flex', flexDirection:'column', gap:14 }}>
 
-            {/* OTP card */}
+            {/* OTP */}
             <div className="glass" style={{ padding:20, textAlign:'center' }}>
-              <p style={{ fontSize:12, color:'var(--text2)', marginBottom:8 }}>Your Start OTP</p>
-              <p style={{ fontSize:36, fontWeight:900, letterSpacing:8, color:'var(--brand)', fontFamily:'monospace' }}>
+              <p style={{ fontSize:11, color:'var(--text3)', fontWeight:700, textTransform:'uppercase', letterSpacing:'0.8px', marginBottom:10 }}>Your Start OTP</p>
+              <p style={{ fontSize:44, fontWeight:900, letterSpacing:8, color:'var(--brand)', fontFamily:'monospace' }}>
                 {activeBooking?.start_otp ?? '----'}
               </p>
-              <p style={{ fontSize:11, color:'var(--text3)', marginTop:8, lineHeight:1.5 }}>
-                Share this OTP with the provider only when they arrive. Do NOT share over phone/chat.
+              <p style={{ fontSize:11, color:'var(--text3)', marginTop:10, lineHeight:1.6 }}>
+                🔐 Share only when provider arrives at your door. Never share over call or chat.
               </p>
+            </div>
+
+            {/* Your location status */}
+            <div className="glass" style={{ padding:16 }}>
+              <p style={{ fontWeight:700, fontSize:13, marginBottom:10 }}>📍 Your Location</p>
+              {customerCoords ? (
+                <div style={{ display:'flex', alignItems:'center', gap:8, fontSize:12 }}>
+                  <div className="live-dot" style={{ width:6, height:6 }} />
+                  <span style={{ color:'#16a34a', fontWeight:600 }}>Location shared with provider</span>
+                </div>
+              ) : (
+                <button className="btn btn-outline btn-sm" style={{ width:'100%' }}
+                  onClick={() => navigator.geolocation?.getCurrentPosition(
+                    p => setCustomerCoords({ lat:p.coords.latitude, lng:p.coords.longitude }),
+                    () => toast.error('Please allow location access in browser settings')
+                  )}>
+                  📍 Share My Location
+                </button>
+              )}
             </div>
 
             {/* Booking details */}
-            <div className="glass" style={{ padding:20 }}>
-              <p style={{ fontWeight:700, fontSize:13, marginBottom:14 }}>Booking Details</p>
+            <div className="glass" style={{ padding:16 }}>
+              <p style={{ fontWeight:700, fontSize:13, marginBottom:12 }}>Booking Details</p>
               {[
-                ['Service',  `${activeBooking?.category?.icon ?? ''} ${activeBooking?.category?.name ?? '—'}`],
-                ['Address',  activeBooking?.address ?? '—'],
-                ['District', activeBooking?.district ?? '—'],
-                ['Amount',   `₹${(activeBooking?.total_amount ?? 0).toLocaleString('en-IN')}`],
-              ].map(([k,v], i) => (
-                <div key={i} style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-start', marginBottom:10, fontSize:13 }}>
-                  <span style={{ color:'var(--text3)', flexShrink:0, marginRight:8 }}>{k}</span>
-                  <span style={{ fontWeight:600, textAlign:'right' }}>{v}</span>
+                ['Booking ID', activeBooking?.booking_ref ?? '—'],
+                ['Service',   `${activeBooking?.category?.icon ?? ''} ${activeBooking?.category?.name ?? '—'}`],
+                ['Address',   activeBooking?.address ?? '—'],
+                ['District',  activeBooking?.district ?? '—'],
+                ['Amount',    `₹${(activeBooking?.total_amount ?? 0).toLocaleString('en-IN')}`],
+              ].map(([k,v],i)=>(
+                <div key={i} style={{ display:'flex', justifyContent:'space-between', fontSize:12, marginBottom:8, gap:8 }}>
+                  <span style={{ color:'var(--text3)', flexShrink:0 }}>{k}</span>
+                  <span style={{ fontWeight:600, textAlign:'right', wordBreak:'break-word' }}>{v}</span>
                 </div>
               ))}
             </div>
 
             {/* Support */}
-            <div className="glass" style={{ padding:16, textAlign:'center' }}>
-              <p style={{ fontSize:12, color:'var(--text2)', marginBottom:10 }}>Need help?</p>
-              <a href="tel:+918045678900" className="btn btn-outline" style={{ width:'100%', display:'block', textDecoration:'none', textAlign:'center' }}>
-                📞 Call Support
-              </a>
-            </div>
+            <a href="tel:+918045678900" className="btn btn-outline" style={{ textDecoration:'none', textAlign:'center', display:'block', fontSize:13 }}>
+              📞 Call Support
+            </a>
           </div>
         </div>
       </div>
-      <style>{`@keyframes float{0%,100%{transform:translateY(0)}50%{transform:translateY(-8px)}}`}</style>
+      <style>{`
+        @keyframes pulse{0%{transform:scale(0.5);opacity:1}100%{transform:scale(2.5);opacity:0}}
+        @keyframes spin{to{transform:rotate(360deg)}}
+        @keyframes provMove{0%,100%{transform:translate(0,0)}33%{transform:translate(15px,8px)}66%{transform:translate(-8px,15px)}}
+      `}</style>
     </div>
   )
 }
