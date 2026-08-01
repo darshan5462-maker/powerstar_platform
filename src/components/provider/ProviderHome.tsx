@@ -1,3 +1,4 @@
+import { useProviderLocation } from '@/hooks/useProviderLocation'
 import { useEffect, useState, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuthStore } from '@/store/authStore'
@@ -31,6 +32,8 @@ export default function ProviderHome() {
   }, [profile])
 
   const first = profile?.full_name?.split(' ')[0] ?? 'Provider'
+  // This auto-starts GPS broadcasting when provider is Online
+  useProviderLocation(profile?.id, online && kycStatus === 'verified')
 
   // Fetch ONLY pending bookings matching provider's category AND district
   async function fetchRequests(district: string, catId: string | null) {
