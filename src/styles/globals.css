@@ -74,3 +74,8 @@ textarea.input{resize:vertical;min-height:80px}
 @keyframes ripple{0%{transform:scale(0.5);opacity:1}100%{transform:scale(2.8);opacity:0}}
 @keyframes provMove{0%,100%{transform:translate(0,0)}33%{transform:translate(15px,8px)}66%{transform:translate(-8px,15px)}}
 @media(max-width:768px){.page-content{padding:14px 14px}.data-table th,.data-table td{padding:10px 12px}}
+
+@media (max-width: 767px) {
+  .desktop-only { display: none !important }
+  .page-content { padding: 14px 14px 80px !important }
+}
