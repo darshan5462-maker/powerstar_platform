@@ -1,37 +1,40 @@
 import { Routes, Route } from 'react-router-dom'
 import Sidebar               from '../components/layout/Sidebar'
-import CustomerHome          from '../components/customer/CustomerHome'
-import CustomerBook          from '../components/customer/CustomerBook'
-import CustomerBookings      from '../components/customer/CustomerBookings'
-import CustomerTrack         from '../components/customer/CustomerTrack'
-import CustomerProfile       from '../components/customer/CustomerProfile'
-import { CustomerMobileNav } from '../components/layout/MobileNav'
+import ProviderHome          from '../components/provider/ProviderHome'
+import ProviderJobs          from '../components/provider/ProviderJobs'
+import ProviderEarnings      from '../components/provider/ProviderEarnings'
+import ProviderKyc           from '../components/provider/ProviderKyc'
+import ProviderProfile       from '../components/provider/ProviderProfile'
+import { ProviderMobileNav } from '../components/layout/MobileNav'
 
 const NAV = [
-  { icon:'🏠', label:'Dashboard',     path:'/dashboard',          section:'Main'    },
-  { icon:'➕', label:'Book Service',  path:'/dashboard/book'                        },
-  { icon:'📋', label:'My Bookings',   path:'/dashboard/bookings'                    },
-  { icon:'📍', label:'Live Tracking', path:'/dashboard/track'                       },
-  { icon:'👤', label:'Profile',       path:'/dashboard/profile',  section:'Account' },
+  { icon:'🏠', label:'Dashboard',    path:'/provider',         section:'Main'    },
+  { icon:'📩', label:'Job Requests', path:'/provider/jobs'                       },
+  { icon:'📋', label:'My Jobs',      path:'/provider/myjobs'                     },
+  { icon:'💰', label:'Earnings',     path:'/provider/earnings'                   },
+  { icon:'⭐', label:'Reviews',      path:'/provider/reviews'                    },
+  { icon:'🔐', label:'KYC Docs',     path:'/provider/kyc'                        },
+  { icon:'👤', label:'Profile',      path:'/provider/profile', section:'Account' },
 ]
 
-export default function CustomerDashboard() {
+export default function ProviderDashboard() {
   return (
     <div style={{ display:'flex', minHeight:'100vh', background:'var(--bg)' }}>
       <div className="desktop-only">
-        <Sidebar items={NAV} basePath="/dashboard" />
+        <Sidebar items={NAV} basePath="/provider" />
       </div>
       <main style={{ flex:1, minWidth:0, background:'var(--bg)', minHeight:'100vh', display:'flex', flexDirection:'column' }}>
         <Routes>
-          <Route index             element={<CustomerHome />}     />
-          <Route path="book"       element={<CustomerBook />}     />
-          <Route path="bookings"   element={<CustomerBookings />} />
-          <Route path="track"      element={<CustomerTrack />}    />
-          <Route path="profile"    element={<CustomerProfile />}  />
-          <Route path="*"          element={<CustomerHome />}     />
+          <Route index           element={<ProviderHome />}     />
+          <Route path="jobs"     element={<ProviderJobs />}     />
+          <Route path="myjobs"   element={<ProviderJobs />}     />
+          <Route path="earnings" element={<ProviderEarnings />} />
+          <Route path="kyc"      element={<ProviderKyc />}      />
+          <Route path="profile"  element={<ProviderProfile />}  />
+          <Route path="*"        element={<ProviderHome />}     />
         </Routes>
       </main>
-      <CustomerMobileNav />
+      <ProviderMobileNav />
     </div>
   )
 }
