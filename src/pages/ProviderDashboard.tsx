@@ -1,5 +1,5 @@
 import { Routes, Route }    from 'react-router-dom'
-import Sidebar               from '@/components/layout/Sidebar'      // ← THIS WAS MISSING
+import Sidebar                from '@/components/layout/Sidebar'      // ← THIS WAS MISSING
 import ProviderHome          from '@/components/provider/ProviderHome'
 import ProviderJobs          from '@/components/provider/ProviderJobs'
 import ProviderEarnings      from '@/components/provider/ProviderEarnings'
