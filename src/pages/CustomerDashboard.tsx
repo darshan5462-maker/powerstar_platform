@@ -34,3 +34,8 @@ export default function CustomerDashboard() {
     </div>
   )
 }
+
+import { CustomerMobileNav } from '@/components/layout/MobileNav'
+
+// Inside return, at the very bottom before closing </div>:
+<CustomerMobileNav />
