@@ -1,146 +1,160 @@
-// Bottom mobile navigation bar — shown only on small screens
-// Add this inside CustomerDashboard.tsx and ProviderDashboard.tsx
-
 import { useNavigate, useLocation } from 'react-router-dom'
 import { useEffect, useState } from 'react'
 import { supabase } from '@/lib/supabase'
 import { useAuthStore } from '@/store/authStore'
 
-interface NavTab {
-  icon:   string
-  label:  string
-  path:   string
-  badge?: number
-}
+interface NavTab { icon:string; label:string; path:string; badge?:number }
 
+// ── CUSTOMER BOTTOM NAV ─────────────────────────────────────
 export function CustomerMobileNav() {
-  const nav      = useNavigate()
-  const location = useLocation()
   const { profile } = useAuthStore()
-  const [activeBookings, setActiveBookings] = useState(0)
-  const [notifications,  setNotifications]  = useState(0)
+  const location = useLocation()
+  const [activeBk, setActiveBk] = useState(0)
+  const [notifs,   setNotifs]   = useState(0)
 
   useEffect(() => {
     if (!profile?.id) return
-    // Count active bookings
-    supabase.from('bookings').select('id', { count:'exact' })
+    supabase.from('bookings').select('id', { count:'exact', head:true })
       .eq('customer_id', profile.id).in('status', ['pending','accepted','active'])
-      .then(({ count }) => setActiveBookings(count ?? 0))
-    // Count unread notifications
-    supabase.from('notifications').select('id', { count:'exact' })
+      .then(({ count }) => setActiveBk(count ?? 0))
+    supabase.from('notifications').select('id', { count:'exact', head:true })
       .eq('user_id', profile.id).eq('is_read', false)
-      .then(({ count }) => setNotifications(count ?? 0))
+      .then(({ count }) => setNotifs(count ?? 0))
   }, [profile?.id, location.pathname])
 
   const tabs: NavTab[] = [
-    { icon:'🏠', label:'Home',     path:'/dashboard' },
-    { icon:'➕', label:'Book',     path:'/dashboard/book' },
-    { icon:'📍', label:'Track',    path:'/dashboard/track',    badge: activeBookings > 0 ? activeBookings : undefined },
-    { icon:'📋', label:'Bookings', path:'/dashboard/bookings' },
-    { icon:'👤', label:'Profile',  path:'/dashboard/profile',  badge: notifications > 0 ? notifications : undefined },
+    { icon:'🏠', label:'Home',     path:'/dashboard'            },
+    { icon:'➕', label:'Book',     path:'/dashboard/book'       },
+    { icon:'📍', label:'Track',    path:'/dashboard/track',   badge: activeBk || undefined },
+    { icon:'📋', label:'Bookings', path:'/dashboard/bookings'   },
+    { icon:'👤', label:'Profile',  path:'/dashboard/profile', badge: notifs    || undefined },
   ]
 
-  return <MobileNavBar tabs={tabs} />
+  return <MobileNavBar tabs={tabs} basePath="/dashboard" />
 }
 
+// ── PROVIDER BOTTOM NAV ─────────────────────────────────────
 export function ProviderMobileNav() {
-  const nav      = useNavigate()
-  const location = useLocation()
   const { profile } = useAuthStore()
-  const [requests,      setRequests]      = useState(0)
-  const [notifications, setNotifications] = useState(0)
+  const location = useLocation()
+  const [requests, setRequests] = useState(0)
+  const [notifs,   setNotifs]   = useState(0)
+  const [activeJob,setActiveJob]= useState(false)
 
   useEffect(() => {
-    if (!profile?.id || !profile?.district) return
-    supabase.from('bookings').select('id', { count:'exact' })
-      .eq('status', 'pending').ilike('district', profile.district)
-      .then(({ count }) => setRequests(count ?? 0))
-    supabase.from('notifications').select('id', { count:'exact' })
+    if (!profile?.id) return
+    // Pending requests in provider's district
+    if (profile.district) {
+      supabase.from('bookings').select('id', { count:'exact', head:true })
+        .eq('status','pending').ilike('district', profile.district)
+        .then(({ count }) => setRequests(count ?? 0))
+    }
+    // Active/accepted job
+    supabase.from('bookings').select('id', { count:'exact', head:true })
+      .eq('provider_id', profile.id).in('status', ['accepted','active'])
+      .then(({ count }) => setActiveJob((count ?? 0) > 0))
+    // Unread notifications
+    supabase.from('notifications').select('id', { count:'exact', head:true })
       .eq('user_id', profile.id).eq('is_read', false)
-      .then(({ count }) => setNotifications(count ?? 0))
+      .then(({ count }) => setNotifs(count ?? 0))
   }, [profile?.id, profile?.district, location.pathname])
 
   const tabs: NavTab[] = [
-    { icon:'🏠', label:'Home',     path:'/provider' },
-    { icon:'📩', label:'Requests', path:'/provider/myjobs',  badge: requests > 0 ? requests : undefined },
-    { icon:'💰', label:'Earnings', path:'/provider/earnings' },
-    { icon:'⭐', label:'Reviews',  path:'/provider/reviews' },
-    { icon:'👤', label:'Profile',  path:'/provider/profile', badge: notifications > 0 ? notifications : undefined },
+    { icon:'🏠', label:'Home',     path:'/provider',          badge: activeJob ? 1 : undefined },
+    { icon:'📩', label:'Requests', path:'/provider/jobs',     badge: requests  || undefined     },
+    { icon:'💰', label:'Earnings', path:'/provider/earnings'                                    },
+    { icon:'🔐', label:'KYC',      path:'/provider/kyc'                                         },
+    { icon:'👤', label:'Profile',  path:'/provider/profile',  badge: notifs    || undefined     },
   ]
 
-  return <MobileNavBar tabs={tabs} />
+  return <MobileNavBar tabs={tabs} basePath="/provider" />
 }
 
-function MobileNavBar({ tabs }: { tabs: NavTab[] }) {
+// ── SHARED NAV BAR COMPONENT ────────────────────────────────
+function MobileNavBar({ tabs, basePath }: { tabs: NavTab[]; basePath: string }) {
   const nav      = useNavigate()
   const location = useLocation()
 
   return (
     <>
-      {/* Spacer so content isn't hidden behind nav */}
-      <div style={{ height:72, flexShrink:0, display:'block' }} className="mobile-nav-spacer" />
+      {/* Spacer so page content isn't hidden behind nav */}
+      <div style={{ height:68 }} className="mobile-spacer" />
 
-      <nav style={{
+      <nav className="mobile-nav" style={{
         position:   'fixed',
         bottom:     0,
         left:       0,
         right:      0,
-        height:     64,
+        height:     60,
         background: 'var(--card)',
         borderTop:  '1px solid var(--border)',
         display:    'flex',
-        alignItems: 'center',
-        justifyContent: 'space-around',
-        zIndex:     100,
+        alignItems: 'stretch',
+        zIndex:     200,
         paddingBottom: 'env(safe-area-inset-bottom)',
-        boxShadow: '0 -4px 24px rgba(0,0,0,0.08)',
-      }} className="mobile-nav">
+        boxShadow:  '0 -2px 20px rgba(0,0,0,0.08)',
+      }}>
         {tabs.map((tab, i) => {
-          const isActive = location.pathname === tab.path ||
-            (tab.path !== '/dashboard' && tab.path !== '/provider' && location.pathname.startsWith(tab.path))
+          const isActive =
+            tab.path === basePath
+              ? location.pathname === tab.path || location.pathname === basePath + '/'
+              : location.pathname.startsWith(tab.path)
+
           return (
             <button key={i} onClick={() => nav(tab.path)}
               style={{
-                flex: 1, display:'flex', flexDirection:'column', alignItems:'center',
-                justifyContent:'center', gap:3, background:'none', border:'none',
-                cursor:'pointer', padding:'6px 0', position:'relative',
+                flex: 1,
+                display: 'flex', flexDirection: 'column',
+                alignItems: 'center', justifyContent: 'center',
+                gap: 3, background: 'none', border: 'none',
+                cursor: 'pointer', padding: '4px 0',
+                position: 'relative',
                 color: isActive ? 'var(--brand)' : 'var(--text3)',
-                transition: 'all 0.18s ease',
+                transition: 'color 0.15s',
               }}>
-              {/* Active indicator */}
+
+              {/* Top active indicator */}
               {isActive && (
                 <div style={{
-                  position:'absolute', top:-1, left:'50%', transform:'translateX(-50%)',
-                  width:32, height:3, background:'var(--brand)', borderRadius:'0 0 3px 3px',
-                }}/>
+                  position: 'absolute', top: 0, left: '50%',
+                  transform: 'translateX(-50%)',
+                  width: 28, height: 3,
+                  background: 'var(--brand)',
+                  borderRadius: '0 0 3px 3px',
+                }} />
               )}
-              {/* Icon with badge */}
-              <div style={{ position:'relative', display:'inline-block' }}>
+
+              {/* Icon + badge */}
+              <div style={{ position: 'relative' }}>
                 <span style={{
                   fontSize: isActive ? 22 : 20,
-                  transition: 'font-size 0.18s ease',
-                  filter: isActive ? 'none' : 'grayscale(0.3)',
+                  transition: 'font-size 0.15s',
+                  display: 'block',
+                  lineHeight: 1,
                 }}>
                   {tab.icon}
                 </span>
                 {!!tab.badge && (
                   <div style={{
-                    position:'absolute', top:-4, right:-6,
-                    background:'#ef4444', color:'#fff',
-                    fontSize:9, fontWeight:800,
-                    minWidth:16, height:16,
-                    borderRadius:10, display:'flex',
-                    alignItems:'center', justifyContent:'center',
-                    padding:'0 3px', border:'2px solid var(--card)',
+                    position: 'absolute', top: -5, right: -7,
+                    background: '#ef4444', color: '#fff',
+                    fontSize: 9, fontWeight: 800,
+                    minWidth: 16, height: 16, borderRadius: 10,
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    padding: '0 3px', border: '2px solid var(--card)',
+                    lineHeight: 1,
                   }}>
                     {tab.badge > 9 ? '9+' : tab.badge}
                   </div>
                 )}
               </div>
+
+              {/* Label */}
               <span style={{
-                fontSize: 10, fontWeight: isActive ? 700 : 500,
-                fontFamily:'Inter,sans-serif',
-                color: isActive ? 'var(--brand)' : 'var(--text3)',
+                fontSize: 10,
+                fontWeight: isActive ? 700 : 500,
+                fontFamily: 'Inter, sans-serif',
+                lineHeight: 1,
               }}>
                 {tab.label}
               </span>
@@ -149,13 +163,15 @@ function MobileNavBar({ tabs }: { tabs: NavTab[] }) {
         })}
       </nav>
 
-      {/* Only show on mobile */}
       <style>{`
-        .mobile-nav { display: flex !important }
-        .mobile-nav-spacer { display: block !important }
-        @media (min-width: 768px) {
-          .mobile-nav { display: none !important }
-          .mobile-nav-spacer { display: none !important }
+        /* Show only on mobile */
+        .mobile-nav    { display: none }
+        .mobile-spacer { display: none }
+        @media (max-width: 767px) {
+          .mobile-nav    { display: flex !important }
+          .mobile-spacer { display: block !important }
+          .desktop-only  { display: none !important }
+          .page-content  { padding-bottom: 80px !important }
         }
       `}</style>
     </>
