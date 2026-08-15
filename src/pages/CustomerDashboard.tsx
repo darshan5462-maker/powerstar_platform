@@ -1,41 +1,54 @@
-import { Routes, Route, useNavigate, useLocation } from 'react-router-dom'
+import { Routes, Route } from 'react-router-dom'
 import Sidebar from '@/components/layout/Sidebar'
 import CustomerHome     from '@/components/customer/CustomerHome'
 import CustomerBook     from '@/components/customer/CustomerBook'
 import CustomerBookings from '@/components/customer/CustomerBookings'
 import CustomerTrack    from '@/components/customer/CustomerTrack'
 import CustomerProfile  from '@/components/customer/CustomerProfile'
+import CustomerPayments from '@/components/customer/CustomerPayments'
+import CustomerReviews  from '@/components/customer/CustomerReviews'
+import Notifications    from '@/components/customer/Notifications'
+
+// ── ADD THIS IMPORT ──────────────────────────────────────────
+import { CustomerMobileNav } from '@/components/layout/MobileNav'
 
 const NAV = [
-  { icon:'🏠', label:'Dashboard',    path:'/dashboard',              section:'Main' },
-  { icon:'➕', label:'Book Service',  path:'/dashboard/book' },
-  { icon:'📋', label:'My Bookings',  path:'/dashboard/bookings' },
-  { icon:'📍', label:'Live Tracking',path:'/dashboard/track' },
-  { icon:'💳', label:'Payments',     path:'/dashboard/payments' },
-  { icon:'⭐', label:'Reviews',      path:'/dashboard/reviews' },
-  { icon:'👤', label:'Profile',      path:'/dashboard/profile',      section:'Account' },
+  { icon:'🏠', label:'Dashboard',  path:'/dashboard',           section:'Main' },
+  { icon:'➕', label:'Book Service',path:'/dashboard/book'       },
+  { icon:'📋', label:'My Bookings',path:'/dashboard/bookings'   },
+  { icon:'📍', label:'Live Tracking',path:'/dashboard/track'    },
+  { icon:'💳', label:'Payments',   path:'/dashboard/payments'   },
+  { icon:'⭐', label:'Reviews',    path:'/dashboard/reviews'    },
+  { icon:'👤', label:'Profile',    path:'/dashboard/profile',   section:'Account' },
   { icon:'🔔', label:'Notifications',path:'/dashboard/notifications' },
 ]
 
 export default function CustomerDashboard() {
   return (
     <div style={{ display:'flex', minHeight:'100vh' }}>
-      <Sidebar items={NAV} basePath="/dashboard" />
+
+      {/* ── WRAP SIDEBAR IN desktop-only div ─────────────────── */}
+      <div className="desktop-only">
+        <Sidebar items={NAV} basePath="/dashboard" />
+      </div>
+
       <main style={{ flex:1, minWidth:0, background:'var(--bg)', minHeight:'100vh' }}>
         <Routes>
-          <Route index         element={<CustomerHome />} />
-          <Route path="book"   element={<CustomerBook />} />
-          <Route path="bookings" element={<CustomerBookings />} />
-          <Route path="track"  element={<CustomerTrack />} />
-          <Route path="profile" element={<CustomerProfile />} />
-          <Route path="*"      element={<CustomerHome />} />
+          <Route index              element={<CustomerHome />}     />
+          <Route path="book"        element={<CustomerBook />}     />
+          <Route path="bookings"    element={<CustomerBookings />} />
+          <Route path="track"       element={<CustomerTrack />}    />
+          <Route path="payments"    element={<CustomerPayments />} />
+          <Route path="reviews"     element={<CustomerReviews />}  />
+          <Route path="profile"     element={<CustomerProfile />}  />
+          <Route path="notifications" element={<Notifications />}  />
+          <Route path="*"           element={<CustomerHome />}     />
         </Routes>
       </main>
+
+      {/* ── ADD THIS AT THE VERY BOTTOM before closing </div> ── */}
+      <CustomerMobileNav />
+
     </div>
   )
 }
-
-import { CustomerMobileNav } from '@/components/layout/MobileNav'
-
-// Inside return, at the very bottom before closing </div>:
-<CustomerMobileNav />
