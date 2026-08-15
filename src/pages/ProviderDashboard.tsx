@@ -34,3 +34,8 @@ export default function ProviderDashboard() {
     </div>
   )
 }
+
+import { ProviderMobileNav } from '@/components/layout/MobileNav'
+
+// Inside return, at the very bottom before closing </div>:
+<ProviderMobileNav />
