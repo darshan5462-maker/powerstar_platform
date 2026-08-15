@@ -1,0 +1,25 @@
+{
+  "name": "POWERSTAR — City Services",
+  "short_name": "POWERSTAR",
+  "description": "Book verified manpower and transport services across Karnataka",
+  "start_url": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#0f172a",
+  "theme_color": "#f97316",
+  "lang": "en-IN",
+  "categories": ["utilities", "lifestyle", "business"],
+  "icons": [
+    { "src": "/icon-192.png",          "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "/icon-512.png",          "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ],
+  "screenshots": [
+    { "src": "/screenshot-mobile.png", "sizes": "390x844", "type": "image/png", "form_factor": "narrow", "label": "POWERSTAR Home" },
+    { "src": "/screenshot-desktop.png", "sizes": "1280x800", "type": "image/png", "form_factor": "wide", "label": "POWERSTAR Dashboard" }
+  ],
+  "shortcuts": [
+    { "name": "Book a Service", "short_name": "Book", "url": "/dashboard/book", "icons": [{ "src": "/icon-192.png", "sizes": "192x192" }] },
+    { "name": "Live Tracking",  "short_name": "Track", "url": "/dashboard/track", "icons": [{ "src": "/icon-192.png", "sizes": "192x192" }] }
+  ]
+}
