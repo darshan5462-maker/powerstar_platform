@@ -1,35 +1,58 @@
 <!doctype html>
-<html lang="en">
+<html lang="en" dir="ltr">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
-    
+
     <!-- PWA -->
     <link rel="manifest" href="/manifest.json" />
-    <meta name="theme-color" content="#f97316" />
-    <meta name="mobile-web-app-capable" content="yes" />
-    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="theme-color" content="#f97316" media="(prefers-color-scheme: light)" />
+    <meta name="theme-color" content="#0f172a"  media="(prefers-color-scheme: dark)"  />
+
+    <!-- Apple PWA -->
+    <meta name="mobile-web-app-capable"            content="yes" />
+    <meta name="apple-mobile-web-app-capable"      content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
-    <meta name="apple-mobile-web-app-title" content="POWERSTAR" />
+    <meta name="apple-mobile-web-app-title"        content="POWERSTAR" />
+    <link rel="apple-touch-icon"                   href="/icon-192.png" />
 
     <!-- Icons -->
-    <link rel="icon"             href="/icon-192.png" type="image/png" />
-    <link rel="apple-touch-icon" href="/icon-192.png" />
-    
+    <link rel="icon" type="image/png" sizes="192x192" href="/icon-192.png" />
+    <link rel="icon" type="image/png" sizes="512x512" href="/icon-512.png" />
+
     <!-- SEO -->
     <title>POWERSTAR — City Services Platform</title>
-    <meta name="description" content="Karnataka's #1 platform for manpower, transport & city services. Book KYC-verified workers instantly." />
-    <meta name="keywords"    content="electrician, plumber, mason, tractor, driver, Karnataka, Bagalkot, services" />
+    <meta name="description" content="Karnataka's #1 platform for manpower, transport & city services. Book KYC-verified workers instantly across 31 districts." />
+    <meta name="keywords"    content="electrician plumber mason tractor driver Karnataka Bagalkot city services manpower" />
+    <meta name="author"      content="POWERSTAR" />
+    <meta name="robots"      content="index, follow" />
 
     <!-- Open Graph -->
-    <meta property="og:title"       content="POWERSTAR — City Services" />
-    <meta property="og:description" content="Book verified manpower and transport across Karnataka" />
-    <meta property="og:image"       content="/icon-512.png" />
     <meta property="og:type"        content="website" />
+    <meta property="og:url"         content="https://powerstar-platform-4sap.vercel.app/" />
+    <meta property="og:title"       content="POWERSTAR — City Services Platform" />
+    <meta property="og:description" content="Book verified manpower and transport across Karnataka" />
+    <meta property="og:image"       content="https://powerstar-platform-4sap.vercel.app/icon-512.png" />
 
-    <!-- Safe area for iPhone notch -->
+    <!-- Twitter Card -->
+    <meta name="twitter:card"        content="summary" />
+    <meta name="twitter:title"       content="POWERSTAR — City Services" />
+    <meta name="twitter:description" content="Book verified workers across Karnataka" />
+    <meta name="twitter:image"       content="https://powerstar-platform-4sap.vercel.app/icon-512.png" />
+
+    <!-- Safe area insets for iPhone notch/dynamic island -->
     <style>
-      body { padding-top: env(safe-area-inset-top); padding-bottom: env(safe-area-inset-bottom); }
+      :root {
+        --sat: env(safe-area-inset-top);
+        --sab: env(safe-area-inset-bottom);
+        --sal: env(safe-area-inset-left);
+        --sar: env(safe-area-inset-right);
+      }
+      body {
+        margin: 0;
+        padding-top: env(safe-area-inset-top);
+      }
+      html, body { overflow-x: hidden; max-width: 100vw }
     </style>
   </head>
   <body>
