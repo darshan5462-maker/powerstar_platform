@@ -1,7 +1,7 @@
 import { useNavigate, useLocation } from 'react-router-dom'
 import { useEffect, useState } from 'react'
-import { supabase } from '../lib/supabase'
-import { useAuthStore } from '../store/authStore'
+import { supabase } from '../../lib/supabase'
+import { useAuthStore } from '../../store/authStore'
 
 interface NavTab { icon:string; label:string; path:string; badge?:number }
 
@@ -21,7 +21,7 @@ export function CustomerMobileNav() {
   const tabs: NavTab[] = [
     { icon:'🏠', label:'Home',     path:'/dashboard'            },
     { icon:'➕', label:'Book',     path:'/dashboard/book'       },
-    { icon:'📍', label:'Track',    path:'/dashboard/track',  badge: activeBk || undefined },
+    { icon:'📍', label:'Track',    path:'/dashboard/track',   badge: activeBk || undefined },
     { icon:'📋', label:'Bookings', path:'/dashboard/bookings'   },
     { icon:'👤', label:'Profile',  path:'/dashboard/profile'    },
   ]
