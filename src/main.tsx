@@ -6,6 +6,8 @@ import { Toaster } from 'react-hot-toast'
 import App from './App'
 import './styles/globals.css'
 import { useThemeStore } from './store/themeStore'
+import { registerSW } from './registerSW'
+registerSW()  // ← add after the last import, before ReactDOM.createRoot
 
 const qc = new QueryClient({ defaultOptions: { queries: { staleTime: 5*60*1000, retry: 1 } } })
 
