@@ -1,11 +1,11 @@
 import { Routes, Route }    from 'react-router-dom'
-import Sidebar                from '@/components/layout/Sidebar'      // ← THIS WAS MISSING
-import ProviderHome          from '@/components/provider/ProviderHome'
-import ProviderJobs          from '@/components/provider/ProviderJobs'
-import ProviderEarnings      from '@/components/provider/ProviderEarnings'
-import ProviderKyc           from '@/components/provider/ProviderKyc'
-import ProviderProfile       from '@/components/provider/ProviderProfile'
-import { ProviderMobileNav } from '@/components/layout/MobileNav'
+import Sidebar               from '../components/layout/Sidebar'
+import ProviderHome          from '../components/provider/ProviderHome'
+import ProviderJobs          from '../components/provider/ProviderJobs'
+import ProviderEarnings      from '../components/provider/ProviderEarnings'
+import ProviderKyc           from '../components/provider/ProviderKyc'
+import ProviderProfile       from '../components/provider/ProviderProfile'
+import { ProviderMobileNav } from '../components/layout/MobileNav'
 
 const NAV = [
   { icon:'🏠', label:'Dashboard',    path:'/provider',         section:'Main'    },
@@ -19,13 +19,9 @@ const NAV = [
 
 export default function ProviderDashboard() {
   return (
-    <div style={{ display:'flex', minHeight:'100vh', background:'var(--bg)' }}>
-
-      <div className="desktop-only">
-        <Sidebar items={NAV} basePath="/provider" />
-      </div>
-
-      <main style={{ flex:1, minWidth:0, background:'var(--bg)', minHeight:'100vh', display:'flex', flexDirection:'column' }}>
+    <div style={{ display:'flex', width:'100%', minHeight:'100vh', background:'var(--bg)' }}>
+      <Sidebar items={NAV} basePath="/provider" />
+      <main style={{ flex:1, minWidth:0, background:'var(--bg)', minHeight:'100vh', display:'flex', flexDirection:'column', overflow:'auto' }}>
         <Routes>
           <Route index           element={<ProviderHome />}     />
           <Route path="jobs"     element={<ProviderJobs />}     />
@@ -36,7 +32,6 @@ export default function ProviderDashboard() {
           <Route path="*"        element={<ProviderHome />}     />
         </Routes>
       </main>
-
       <ProviderMobileNav />
     </div>
   )
