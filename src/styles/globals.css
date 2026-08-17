@@ -76,3 +76,12 @@ textarea.input{resize:vertical;min-height:80px}
 @keyframes blink{0%,100%{opacity:1}50%{opacity:0.2}}
 @keyframes ripple{0%{transform:scale(0.5);opacity:1}100%{transform:scale(2.8);opacity:0}}
 @media(max-width:767px){.page-content{padding:14px 14px}.data-table th,.data-table td{padding:10px 12px}.desktop-only{display:none!important}.page-content{padding-bottom:80px!important}}
+
+/* ── RESPONSIVE LAYOUT ── */
+@media (max-width: 767px) {
+  /* Hide sidebar on mobile — MobileNav takes over */
+  aside { display: none !important }
+  .page-content { padding: 14px 14px 80px !important }
+  /* Stats grid 2 columns on mobile */
+  .stats-grid { grid-template-columns: repeat(2,1fr) !important }
+}
