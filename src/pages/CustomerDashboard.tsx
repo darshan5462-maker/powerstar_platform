@@ -1,11 +1,11 @@
 import { Routes, Route }    from 'react-router-dom'
-import Sidebar               from '../components/layout/Sidebar'
-import CustomerHome          from '../components/customer/CustomerHome'
-import CustomerBook          from '../components/customer/CustomerBook'
-import CustomerBookings      from '../components/customer/CustomerBookings'
-import CustomerTrack         from '../components/customer/CustomerTrack'
-import CustomerProfile       from '../components/customer/CustomerProfile'
-import { CustomerMobileNav } from '../components/layout/MobileNav'
+import Sidebar               from '@/components/layout/Sidebar'
+import CustomerHome          from '@/components/customer/CustomerHome'
+import CustomerBook          from '@/components/customer/CustomerBook'
+import CustomerBookings      from '@/components/customer/CustomerBookings'
+import CustomerTrack         from '@/components/customer/CustomerTrack'
+import CustomerProfile       from '@/components/customer/CustomerProfile'
+import { CustomerMobileNav } from '@/components/layout/MobileNav'
 
 const NAV = [
   { icon:'🏠', label:'Dashboard',     path:'/dashboard',          section:'Main'    },
@@ -19,7 +19,7 @@ export default function CustomerDashboard() {
   return (
     <div style={{ display:'flex', width:'100%', minHeight:'100vh', background:'var(--bg)' }}>
       <Sidebar items={NAV} basePath="/dashboard" />
-      <main style={{ flex:1, minWidth:0, background:'var(--bg)', minHeight:'100vh', display:'flex', flexDirection:'column', overflow:'auto' }}>
+      <main style={{ flex:1, minWidth:0, background:'var(--bg)', minHeight:'100vh', display:'flex', flexDirection:'column' }}>
         <Routes>
           <Route index           element={<CustomerHome />}     />
           <Route path="book"     element={<CustomerBook />}     />
