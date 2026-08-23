@@ -63,7 +63,7 @@ export default function AdminHome() {
   ]
 
   return (
-    <div>
+    <div className="admin-home">
       <PageHeader
         title="Admin Dashboard"
         subtitle="Real-time platform overview"
@@ -79,7 +79,7 @@ export default function AdminHome() {
       <div className="page-content">
 
         {/* Primary metrics */}
-        <div style={{ display:'grid', gridTemplateColumns:'repeat(4,1fr)', gap:14, marginBottom:20 }}>
+        <div className="admin-stat-grid" style={{ display:'grid', gridTemplateColumns:'repeat(4,1fr)', gap:14, marginBottom:20 }}>
           {STAT_CARDS.map((c, i) => (
             <div key={i} className="glass" style={{ padding:18, cursor:c.path?'pointer':'default', transition:'all 0.18s' }}
               onClick={() => c.path && nav(c.path)}
@@ -101,7 +101,7 @@ export default function AdminHome() {
         </div>
 
         {/* Alert row */}
-        <div style={{ display:'grid', gridTemplateColumns:'repeat(3,1fr)', gap:14, marginBottom:20 }}>
+        <div className="admin-alert-grid" style={{ display:'grid', gridTemplateColumns:'repeat(3,1fr)', gap:14, marginBottom:20 }}>
           {[
             { icon:'🔐', label:'KYC Pending',     val: loading?'...':kyc,                            color: kyc>0?'#d97706':'var(--text)',   path:'/admin/kyc',      alert:kyc>0 },
             { icon:'📋', label:'Pending Bookings', val: loading?'...':(stats?.pendingBookings ?? 0),  color:'var(--text)',                    path:'/admin/bookings', alert:false },
@@ -120,8 +120,8 @@ export default function AdminHome() {
         </div>
 
         {/* Charts */}
-        <div style={{ display:'grid', gridTemplateColumns:'2fr 1fr', gap:18, marginBottom:20 }}>
-          <div className="glass" style={{ padding:22 }}>
+        <div className="admin-chart-grid" style={{ display:'grid', gridTemplateColumns:'2fr 1fr', gap:18, marginBottom:20 }}>
+          <div className="glass admin-chart-card" style={{ padding:22 }}>
             <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:18 }}>
               <h3 style={{ fontWeight:700, fontSize:14 }}>Monthly Revenue (₹L)</h3>
               <span className="badge badge-gray">Live data · {bookings.length} recent records</span>
@@ -136,7 +136,7 @@ export default function AdminHome() {
               </BarChart>
             </ResponsiveContainer>
           </div>
-          <div className="glass" style={{ padding:22 }}>
+          <div className="glass admin-chart-card" style={{ padding:22 }}>
             <h3 style={{ fontWeight:700, fontSize:14, marginBottom:14 }}>Bookings by Type</h3>
             <ResponsiveContainer width="100%" height={100}>
               <PieChart>
@@ -178,6 +178,7 @@ export default function AdminHome() {
               <p style={{ color:'var(--text3)', fontSize:12 }}>Bookings appear here in real-time when customers place orders</p>
             </div>
           ) : (
+            <div className="admin-table-scroll">
             <table className="data-table">
               <thead>
                 <tr><th>Booking ID</th><th>Customer</th><th>Service</th><th>District</th><th>Amount</th><th>Date</th><th>Status</th></tr>
@@ -203,6 +204,8 @@ export default function AdminHome() {
                 ))}
               </tbody>
             </table>
+            <p className="admin-table-hint">Swipe horizontally to view all booking details.</p>
+            </div>
           )}
         </div>
       </div>
