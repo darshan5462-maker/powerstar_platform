@@ -74,3 +74,20 @@ select.input{cursor:pointer}textarea.input{resize:vertical;min-height:80px}
 @keyframes ripple{0%{transform:scale(0.5);opacity:1}100%{transform:scale(2.8);opacity:0}}
 @keyframes fadeIn{from{opacity:0}to{opacity:1}}
 @keyframes slideUp{from{transform:translateY(20px);opacity:0}to{transform:translateY(0);opacity:1}}
+
+/* Mobile customer navigation */
+.mobile-menu-trigger{display:none;position:fixed;top:14px;right:14px;width:44px;height:44px;border:1px solid rgba(255,255,255,0.24);border-radius:13px;background:rgba(15,23,42,0.88);color:#fff;font-size:24px;line-height:1;align-items:center;justify-content:center;z-index:260;box-shadow:0 6px 20px rgba(15,23,42,0.22)}
+.mobile-menu-trigger.is-open{background:var(--brand);border-color:var(--brand)}
+.mobile-drawer-backdrop{position:fixed;inset:0;background:rgba(15,23,42,0.52);z-index:250;display:flex;justify-content:flex-end}
+.mobile-drawer{width:min(86vw,340px);height:100%;background:var(--card);padding:22px 18px max(22px,env(safe-area-inset-bottom));box-shadow:-12px 0 30px rgba(15,23,42,0.22);display:flex;flex-direction:column;animation:mobileDrawerIn .2s ease-out}
+.mobile-drawer-profile{display:flex;align-items:center;gap:12px;padding:14px;border:1px solid var(--border);border-radius:14px;background:var(--bg2)}
+.mobile-drawer-avatar{width:42px;height:42px;border-radius:50%;display:flex;align-items:center;justify-content:center;background:var(--brand-light);color:var(--brand);font-weight:800;font-size:18px}
+.mobile-drawer-item{width:100%;display:flex;align-items:center;gap:12px;padding:12px 13px;border:0;border-radius:11px;background:transparent;color:var(--text2);font:600 14px Inter,sans-serif;text-align:left;cursor:pointer}
+.mobile-drawer-item:hover,.mobile-drawer-item.active{background:var(--brand-light);color:var(--brand)}
+@keyframes mobileDrawerIn{from{transform:translateX(100%);opacity:.7}to{transform:translateX(0);opacity:1}}
+@media (max-width:767px){
+  .mobile-menu-trigger{display:flex}
+  .mobile-bottom-nav{height:calc(62px + env(safe-area-inset-bottom)) !important;padding-bottom:env(safe-area-inset-bottom) !important}
+  .mobile-nav-spacer{height:78px !important}
+  .page-content{padding-bottom:92px !important}
+}
