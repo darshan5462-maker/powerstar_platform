@@ -34,6 +34,8 @@ export default function ActiveJobCard({ job, myCoords, onStartJob, onCompleteJob
   const [eta,           setEta]           = useState<number|null>(null)
   const [mapLoaded,     setMapLoaded]     = useState(false)
   const [showMap,       setShowMap]       = useState(true)
+  const [locationError, setLocationError] = useState<string | null>(null)
+  const routeRef        = useRef<any>(null)
 
   // Fetch customer location from DB
   useEffect(() => {
@@ -44,8 +46,17 @@ export default function ActiveJobCard({ job, myCoords, onStartJob, onCompleteJob
       .select('latitude, longitude')
       .eq('booking_id', job.id)
       .maybeSingle()
-      .then(({ data }) => {
-        if (data) setCustCoords({ lat: data.latitude, lng: data.longitude })
+      .then(({ data, error }) => {
+        if (error) {
+          setLocationError('Customer GPS is not available yet.')
+          return
+        }
+        if (data && Number.isFinite(data.latitude) && Number.isFinite(data.longitude)) {
+          setCustCoords({ lat: data.latitude, lng: data.longitude })
+          setLocationError(null)
+        } else {
+          setLocationError('Customer has not shared a live GPS location yet. You can still navigate to the saved address.')
+        }
       })
 
     // Realtime subscription
@@ -55,7 +66,10 @@ export default function ActiveJobCard({ job, myCoords, onStartJob, onCompleteJob
         filter: `booking_id=eq.${job.id}`
       }, (payload: any) => {
         const { latitude: lat, longitude: lng } = payload.new ?? {}
-        if (lat && lng) setCustCoords({ lat, lng })
+        if (Number.isFinite(lat) && Number.isFinite(lng)) {
+          setCustCoords({ lat, lng })
+          setLocationError(null)
+        }
       })
       .subscribe()
 
@@ -93,12 +107,16 @@ export default function ActiveJobCard({ job, myCoords, onStartJob, onCompleteJob
         const center = myCoords ?? custCoords ?? { lat: 15.3173, lng: 75.7139 }
         const map = L.map(mapRef.current, {
           center: [center.lat, center.lng], zoom: 14,
-          zoomControl: false, attributionControl: false,
+          zoomControl: false, attributionControl: true,
         })
-        L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', { maxZoom: 19 }).addTo(map)
+        L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
+          maxZoom: 19,
+          attribution: '&copy; OpenStreetMap &copy; CARTO',
+        }).addTo(map)
         L.control.zoom({ position: 'bottomright' }).addTo(map)
         leafletRef.current = map
         setMapLoaded(true)
+        window.setTimeout(() => map.invalidateSize(), 0)
       }
     }
     load()
@@ -143,25 +161,52 @@ export default function ActiveJobCard({ job, myCoords, onStartJob, onCompleteJob
     }
 
     // Route line
-    if (myCoords && custCoords) {
-      if (markersRef.current.route) map.removeLayer(markersRef.current.route)
-      markersRef.current.route = L.polyline(
-        [[myCoords.lat, myCoords.lng], [custCoords.lat, custCoords.lng]],
-        { color: '#f97316', weight: 3, dashArray: '10,8', opacity: 0.85 }
-      ).addTo(map)
+    let cancelled = false
+    const drawRoute = async () => {
+      if (routeRef.current) {
+        map.removeLayer(routeRef.current)
+        routeRef.current = null
+      }
+      if (!myCoords || !custCoords) {
+        if (myCoords) map.setView([myCoords.lat, myCoords.lng], 15)
+        return
+      }
+
       map.fitBounds(
         L.latLngBounds([[myCoords.lat,myCoords.lng],[custCoords.lat,custCoords.lng]]),
         { padding: [50, 50] }
       )
-    } else if (myCoords) {
-      map.setView([myCoords.lat, myCoords.lng], 15)
+
+      try {
+        const response = await fetch(`https://router.project-osrm.org/route/v1/driving/${myCoords.lng},${myCoords.lat};${custCoords.lng},${custCoords.lat}?overview=full&geometries=geojson`)
+        const payload = await response.json()
+        const geometry = payload?.routes?.[0]?.geometry
+        if (!cancelled && geometry) {
+          routeRef.current = L.geoJSON(geometry, { style: { color:'#f97316', weight:5, opacity:0.85 } }).addTo(map)
+          return
+        }
+      } catch {
+        // Fall back to a direct line when routing service is unavailable.
+      }
+
+      if (!cancelled) {
+        routeRef.current = L.polyline(
+          [[myCoords.lat, myCoords.lng], [custCoords.lat, custCoords.lng]],
+          { color:'#f97316', weight:4, dashArray:'10,8', opacity:0.85 }
+        ).addTo(map)
+      }
     }
+    void drawRoute()
+    return () => { cancelled = true }
   }, [myCoords, custCoords, mapLoaded]) // eslint-disable-line
 
   function openGoogleMaps() {
-    if (!custCoords) { toast.error('Customer location not available yet'); return }
-    const url = `https://www.google.com/maps/dir/?api=1&destination=${custCoords.lat},${custCoords.lng}&travelmode=driving`
-    window.open(url, '_blank')
+    const savedAddress = [job?.address, job?.city, job?.district].filter(Boolean).join(', ')
+    if (!custCoords && !savedAddress) { toast.error('Customer location and address are not available yet'); return }
+    const destination = custCoords ? `${custCoords.lat},${custCoords.lng}` : encodeURIComponent(savedAddress)
+    const origin = myCoords ? `&origin=${myCoords.lat},${myCoords.lng}` : ''
+    const url = `https://www.google.com/maps/dir/?api=1${origin}&destination=${destination}&travelmode=driving`
+    window.open(url, '_blank', 'noopener,noreferrer')
   }
 
   return (
@@ -183,8 +228,8 @@ export default function ActiveJobCard({ job, myCoords, onStartJob, onCompleteJob
 
       {/* MAP — full width */}
       {showMap && (
-        <div style={{ position:'relative' }}>
-          <div ref={mapRef} style={{ height:220, width:'100%' }} />
+        <div className="active-job-map" style={{ position:'relative', width:'100%', maxWidth:'100%', overflow:'hidden', isolation:'isolate' }}>
+          <div ref={mapRef} className="provider-job-map" style={{ height:220, width:'100%', maxWidth:'100%' }} />
 
           {/* ETA pill over map */}
           {distKm !== null && eta !== null && job.status === 'accepted' && (
@@ -196,19 +241,19 @@ export default function ActiveJobCard({ job, myCoords, onStartJob, onCompleteJob
 
           {/* No customer location yet */}
           {!custCoords && (
-            <div style={{ position:'absolute', bottom:12, left:'50%', transform:'translateX(-50%)', background:'rgba(217,119,6,0.9)', borderRadius:12, padding:'6px 14px', color:'#fff', fontSize:11, fontWeight:600, zIndex:999, whiteSpace:'nowrap' }}>
-              ⏳ Waiting for customer to share location...
+            <div style={{ position:'absolute', bottom:12, left:'50%', transform:'translateX(-50%)', maxWidth:'calc(100% - 24px)', background:'rgba(255,255,255,0.96)', border:'1px solid rgba(217,119,6,0.35)', boxShadow:'0 2px 10px rgba(15,23,42,0.15)', borderRadius:12, padding:'7px 14px', color:'#92400e', fontSize:11, fontWeight:700, zIndex:20, whiteSpace:'normal', textAlign:'center' }}>
+              ⏳ {locationError ?? 'Waiting for customer to share location…'}
             </div>
           )}
 
           {/* Live badge */}
-          <div style={{ position:'absolute', top:12, right:12, background:'rgba(0,0,0,0.7)', borderRadius:20, padding:'4px 10px', display:'flex', alignItems:'center', gap:5, color:'#fff', fontSize:11, fontWeight:700, zIndex:999, backdropFilter:'blur(6px)' }}>
+          <div style={{ position:'absolute', top:12, right:12, background:'rgba(255,255,255,0.94)', border:'1px solid rgba(22,163,74,0.25)', borderRadius:20, padding:'5px 10px', display:'flex', alignItems:'center', gap:5, color:'#166534', fontSize:11, fontWeight:700, zIndex:20, boxShadow:'0 2px 8px rgba(15,23,42,0.12)' }}>
             <div className="live-dot" style={{ width:5, height:5 }} /> GPS Live
           </div>
 
           {/* Hide map toggle */}
           <button onClick={() => setShowMap(false)}
-            style={{ position:'absolute', top:12, left:12, background:'rgba(0,0,0,0.6)', border:'none', borderRadius:8, padding:'4px 10px', color:'#fff', fontSize:11, cursor:'pointer', zIndex:999, backdropFilter:'blur(6px)' }}>
+            style={{ position:'absolute', top:12, left:12, background:'rgba(255,255,255,0.94)', border:'1px solid var(--border)', borderRadius:8, padding:'5px 10px', color:'var(--text)', fontSize:11, cursor:'pointer', zIndex:20, boxShadow:'0 2px 8px rgba(15,23,42,0.12)' }}>
             Hide map
           </button>
         </div>
@@ -296,7 +341,9 @@ export default function ActiveJobCard({ job, myCoords, onStartJob, onCompleteJob
       </div>
 
       <style>{`
-        .map-tooltip { background: rgba(0,0,0,0.8) !important; border: none !important; color: #fff !important; font-size: 11px !important; font-weight: 700 !important; padding: 3px 8px !important; border-radius: 6px !important; }
+        .provider-job-map .leaflet-container { width:100%; max-width:100%; z-index:0; }
+        .provider-job-map .leaflet-control-attribution { font-size:9px; background:rgba(255,255,255,0.78); }
+        .map-tooltip { background: rgba(255,255,255,0.96) !important; border: 1px solid rgba(15,23,42,0.12) !important; color: #0f172a !important; font-size: 11px !important; font-weight: 700 !important; padding: 3px 8px !important; border-radius: 6px !important; box-shadow: 0 2px 8px rgba(15,23,42,0.16) !important; }
         .map-tooltip::before { display: none !important; }
       `}</style>
     </div>
