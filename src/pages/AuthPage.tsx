@@ -102,7 +102,7 @@ export default function AuthPage() {
   }
 
   return (
-    <div style={{minHeight:'100vh',display:'flex',background:'var(--bg)'}}>
+    <div className="auth-page" style={{minHeight:'100vh',width:'100%',minWidth:0,display:'flex',background:'var(--bg)'}}>
       {/* Left panel */}
       <div style={{flex:1,background:'linear-gradient(135deg,#0f172a 0%,#1e293b 100%)',padding:'40px 48px',flexDirection:'column',justifyContent:'space-between',position:'relative',overflow:'hidden'}}
         className="auth-left-panel">
@@ -144,7 +144,7 @@ export default function AuthPage() {
       </div>
 
       {/* Right panel */}
-      <div style={{flex:1,display:'flex',alignItems:'center',justifyContent:'center',padding:'32px 24px',overflowY:'auto'}}>
+      <div className="auth-main-panel" style={{flex:1,minWidth:0,display:'flex',alignItems:'center',justifyContent:'center',padding:'32px 24px',overflowY:'auto'}}>
         <div style={{width:'100%',maxWidth:420}}>
           <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:28}}>
             <div style={{display:'flex',alignItems:'center',gap:10,cursor:'pointer'}} onClick={()=>navigate('/')}>
@@ -218,8 +218,13 @@ export default function AuthPage() {
         </div>
       </div>
       <style>{`
-        .auth-left-panel { display: flex !important; }
-        @media(max-width:860px){ .auth-left-panel{ display:none !important; } }
+        .auth-page { width:100%; min-width:0; }
+        .auth-left-panel { display: flex !important; min-width:0; }
+        .auth-main-panel { min-width:0; }
+        @media(max-width:860px){
+          .auth-left-panel{ display:none !important; }
+          .auth-main-panel{ width:100%; }
+        }
         @keyframes spin { to { transform: rotate(360deg); } }
       `}</style>
     </div>
