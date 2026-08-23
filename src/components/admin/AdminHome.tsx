@@ -178,6 +178,7 @@ export default function AdminHome() {
               <p style={{ color:'var(--text3)', fontSize:12 }}>Bookings appear here in real-time when customers place orders</p>
             </div>
           ) : (
+            <>
             <div className="admin-table-scroll">
             <table className="data-table">
               <thead>
@@ -206,6 +207,24 @@ export default function AdminHome() {
             </table>
             <p className="admin-table-hint">Swipe horizontally to view all booking details.</p>
             </div>
+            <div className="admin-mobile-booking-list">
+              {bookings.map((b: any) => (
+                <div key={b.id} className="admin-mobile-booking-card">
+                  <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', gap:10, marginBottom:12 }}>
+                    <span style={{ fontFamily:'monospace', fontSize:12, color:'var(--text2)' }}>{b.booking_ref}</span>
+                    <StatusBadge status={b.status} />
+                  </div>
+                  <div className="admin-mobile-booking-grid">
+                    <div><span>Customer</span><strong style={{ display:'flex', alignItems:'center', gap:7 }}><Avatar name={b.customer?.full_name ?? 'U'} size={25} />{b.customer?.full_name ?? '—'}</strong></div>
+                    <div><span>Service</span><strong>{b.category?.icon} {b.category?.name ?? '—'}</strong></div>
+                    <div><span>District</span><strong>{b.district ?? '—'}</strong></div>
+                    <div><span>Amount</span><strong>₹{(b.total_amount||0).toLocaleString('en-IN')}</strong></div>
+                    <div><span>Date</span><strong>{new Date(b.created_at).toLocaleDateString('en-IN',{day:'numeric',month:'short',year:'2-digit'})}</strong></div>
+                  </div>
+                </div>
+              ))}
+            </div>
+            </>
           )}
         </div>
       </div>
