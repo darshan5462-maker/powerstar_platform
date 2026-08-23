@@ -39,7 +39,7 @@ BEGIN
   VALUES (
     NEW.id,
     COALESCE(NEW.raw_user_meta_data->>'full_name', split_part(NEW.email,'@',1)),
-    COALESCE((NEW.raw_user_meta_data->>'role')::user_role, 'customer'),
+    CASE WHEN NEW.raw_user_meta_data->>'role' = 'provider' THEN 'provider'::user_role ELSE 'customer'::user_role END,
     NEW.raw_user_meta_data->>'phone',
     NEW.raw_user_meta_data->>'district'
   )
@@ -364,9 +364,9 @@ ALTER PUBLICATION supabase_realtime ADD TABLE notifications;
 
 -- ── DONE ───────────────────────────────────────────────────────
 -- Next steps:
--- 1. Create admin user: Authentication → Users → Add User
---    Email: admin@powerstar.in  Password: Admin@2025!
--- 2. Run this in SQL Editor:
---    UPDATE profiles SET role='admin', full_name='POWERSTAR Admin'
---    WHERE id=(SELECT id FROM auth.users WHERE email='admin@powerstar.in');
--- 3. Create storage buckets: avatars (public), kyc-documents (private)
+-- 1. Create an administrator through the Supabase dashboard using a strong
+--    password stored out-of-band, then promote that user from a protected
+--    SQL Editor session.
+-- 2. Create storage buckets: avatars (public), kyc-documents (private).
+-- 3. Apply the additive migrations in supabase/migrations/ before enabling
+--    production traffic.

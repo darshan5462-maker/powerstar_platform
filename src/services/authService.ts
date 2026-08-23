@@ -29,17 +29,8 @@ export async function signUp(params: {
   })
   if (error) throw error
 
-  // Create profile immediately (don't wait for trigger)
-  if (data.user) {
-    await supabase.from('profiles').upsert({
-      id: data.user.id,
-      full_name: params.full_name,
-      role: params.role,
-      phone: params.phone,
-      district: params.district,
-      is_active: true,
-    }, { onConflict: 'id' })
-  }
+  // Profile creation is handled by the database trigger so the client cannot
+  // overwrite role or activation state after signup.
 
   return data
 }

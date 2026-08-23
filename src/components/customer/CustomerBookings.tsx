@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuthStore } from '@/store/authStore'
-import { getCustomerBookings, updateBookingStatus } from '@/services/bookingService'
+import { getCustomerBookings, cancelCustomerBooking } from '@/services/bookingService'
 import PageHeader from '@/components/layout/PageHeader'
 import { StatusBadge } from '@/components/ui/Badge'
 import toast from 'react-hot-toast'
@@ -34,11 +34,12 @@ export default function CustomerBookings() {
   })
 
   async function cancel(id: string) {
+    if (!profile?.id || !window.confirm('Cancel this pending booking?')) return
     try {
-      await updateBookingStatus(id, 'cancelled')
+      await cancelCustomerBooking(id, profile.id)
       setBookings(prev => prev.map(b => b.id===id ? {...b,status:'cancelled'} : b))
       toast.success('Booking cancelled')
-    } catch { toast.error('Failed to cancel') }
+    } catch (err: any) { toast.error(err?.message || 'Failed to cancel') }
   }
 
   return (
@@ -97,7 +98,7 @@ export default function CustomerBookings() {
                           <button className="btn btn-danger btn-sm" onClick={()=>cancel(b.id)}>Cancel</button>
                         )}
                         {b.status==='completed' && (
-                          <button className="btn btn-outline btn-sm">Review</button>
+                          <button className="btn btn-outline btn-sm" onClick={() => toast('Review collection is coming soon.', { icon:'⭐' })}>Review</button>
                         )}
                         {b.status==='cancelled' && (
                           <button className="btn btn-outline btn-sm" onClick={()=>nav('/dashboard/book')}>Rebook</button>

@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useMemo, useState, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { getPlatformStats, getAllBookingsAdmin, subscribeToBookings } from '@/services/bookingService'
 import { supabase } from '@/lib/supabase'
@@ -6,18 +6,6 @@ import PageHeader from '@/components/layout/PageHeader'
 import { StatusBadge } from '@/components/ui/Badge'
 import Avatar from '@/components/ui/Avatar'
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, PieChart, Pie, Cell } from 'recharts'
-
-const PIE = [
-  { name:'Manpower', value:62, color:'#f97316' },
-  { name:'Vehicles', value:24, color:'#2563eb' },
-  { name:'RTO',      value:9,  color:'#16a34a' },
-  { name:'Financial',value:5,  color:'#d97706' },
-]
-const MONTHLY = [
-  { m:'Jan',r:3.2 },{ m:'Feb',r:4.1 },{ m:'Mar',r:3.8 },{ m:'Apr',r:5.2 },
-  { m:'May',r:6.4 },{ m:'Jun',r:7.8 },{ m:'Jul',r:8.1 },{ m:'Aug',r:7.2 },
-  { m:'Sep',r:8.4 },{ m:'Oct',r:9.2 },
-]
 
 export default function AdminHome() {
   const nav = useNavigate()
@@ -33,7 +21,7 @@ export default function AdminHome() {
       supabase.from('providers').select('id', { count:'exact', head:true }).in('kyc_status', ['pending','submitted']),
     ])
     setStats(s)
-    setBookings(b.slice(0, 10))
+    setBookings(b)
     setKyc(k.count ?? 0)
     setLoading(false)
   }, [])
@@ -44,6 +32,28 @@ export default function AdminHome() {
     const ch = subscribeToBookings(() => load())
     return () => { ch.unsubscribe() }
   }, [load])
+
+  const bookingTypeData = useMemo(() => {
+    const colors: Record<string, string> = { manpower:'#f97316', vehicle:'#2563eb', rto:'#16a34a', financial:'#d97706' }
+    const counts = new Map<string, number>()
+    bookings.forEach((booking: any) => {
+      const type = booking.category?.type || 'other'
+      counts.set(type, (counts.get(type) ?? 0) + 1)
+    })
+    const total = bookings.length || 1
+    return Array.from(counts.entries()).map(([name, count]) => ({ name, value: Math.round(count / total * 100), color: colors[name] ?? '#64748b' }))
+  }, [bookings])
+
+  const monthlyRevenue = useMemo(() => {
+    const totals = new Map<string, number>()
+    bookings.forEach((booking: any) => {
+      const date = new Date(booking.created_at)
+      if (Number.isNaN(date.getTime())) return
+      const key = date.toLocaleDateString('en-IN', { month:'short' })
+      totals.set(key, (totals.get(key) ?? 0) + Number(booking.total_amount ?? 0))
+    })
+    return Array.from(totals.entries()).slice(-10).map(([m, amount]) => ({ m, r: Math.round(amount / 100000 * 10) / 10 }))
+  }, [bookings])
 
   const STAT_CARDS = [
     { icon:'📋', bg:'rgba(249,115,22,0.1)', label:'Total Bookings',  val: stats?.totalBookings  ?? 0, sub:`${stats?.activeBookings??0} active now`,   color:'#f97316', path:'/admin/bookings' },
@@ -114,10 +124,10 @@ export default function AdminHome() {
           <div className="glass" style={{ padding:22 }}>
             <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:18 }}>
               <h3 style={{ fontWeight:700, fontSize:14 }}>Monthly Revenue (₹L)</h3>
-              <span className="badge badge-green">↑ 22% vs last month</span>
+              <span className="badge badge-gray">Live data · {bookings.length} recent records</span>
             </div>
             <ResponsiveContainer width="100%" height={160}>
-              <BarChart data={MONTHLY} barSize={22}>
+              <BarChart data={monthlyRevenue} barSize={22}>
                 <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" vertical={false} />
                 <XAxis dataKey="m" tick={{ fill:'var(--text2)', fontSize:11 }} axisLine={false} tickLine={false} />
                 <YAxis hide />
@@ -130,14 +140,14 @@ export default function AdminHome() {
             <h3 style={{ fontWeight:700, fontSize:14, marginBottom:14 }}>Bookings by Type</h3>
             <ResponsiveContainer width="100%" height={100}>
               <PieChart>
-                <Pie data={PIE} cx="50%" cy="50%" innerRadius={28} outerRadius={46} dataKey="value" stroke="none">
-                  {PIE.map((e, i) => <Cell key={i} fill={e.color} />)}
+                <Pie data={bookingTypeData} cx="50%" cy="50%" innerRadius={28} outerRadius={46} dataKey="value" stroke="none">
+                  {bookingTypeData.map((e, i) => <Cell key={i} fill={e.color} />)}
                 </Pie>
                 <Tooltip contentStyle={{ background:'var(--card)', border:'1px solid var(--border)', borderRadius:10, fontSize:11 }} formatter={(v: number) => [v+'%', '']} />
               </PieChart>
             </ResponsiveContainer>
             <div style={{ display:'flex', flexDirection:'column', gap:6, marginTop:8 }}>
-              {PIE.map((d, i) => (
+              {bookingTypeData.map((d, i) => (
                 <div key={i} style={{ display:'flex', justifyContent:'space-between', alignItems:'center', fontSize:12 }}>
                   <div style={{ display:'flex', alignItems:'center', gap:6 }}>
                     <div style={{ width:8, height:8, borderRadius:'50%', background:d.color }} />

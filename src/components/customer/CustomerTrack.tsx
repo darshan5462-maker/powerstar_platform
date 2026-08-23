@@ -28,6 +28,7 @@ export default function CustomerTrack() {
   const [bookings,      setBookings]      = useState<any[]>([])
   const [selected,      setSelected]      = useState<string|null>(null)
   const [loading,       setLoading]       = useState(true)
+  const [loadError,     setLoadError]     = useState<string | null>(null)
   const [provCoords,    setProvCoords]    = useState<Coords|null>(null)
   const [custCoords,    setCustCoords]    = useState<Coords|null>(null)
   const [locGranted,    setLocGranted]    = useState(false)
@@ -36,7 +37,8 @@ export default function CustomerTrack() {
 
   const load = useCallback(async () => {
     if (!profile?.id) return
-    const { data } = await supabase
+    setLoadError(null)
+    const { data, error } = await supabase
       .from('bookings')
       .select(`*, category:service_categories(name,icon),
         provider_profile:providers!bookings_provider_id_fkey(rating,
@@ -44,7 +46,12 @@ export default function CustomerTrack() {
       .eq('customer_id', profile.id)
       .in('status', ['pending','accepted','active'])
       .order('created_at', { ascending:false })
-    setBookings(data ?? [])
+    if (error) {
+      setLoadError('Your active bookings could not be loaded.')
+      setBookings([])
+    } else {
+      setBookings(data ?? [])
+    }
     if (data?.length && !selected) setSelected(data[0].id)
     setLoading(false)
   }, [profile?.id]) // eslint-disable-line
@@ -135,8 +142,11 @@ export default function CustomerTrack() {
   }, [profile?.id, load]) // eslint-disable-line
 
   async function cancelBooking(id: string) {
-    const { error } = await supabase.from('bookings').update({ status:'cancelled', cancelled_at:new Date().toISOString() }).eq('id', id)
-    if (error) { toast.error('Failed to cancel'); return }
+    if (!profile?.id || !window.confirm('Cancel this pending booking?')) return
+    const { error } = await supabase.from('bookings')
+      .update({ status:'cancelled', cancelled_at:new Date().toISOString(), cancellation_reason:'Cancelled by customer' })
+      .eq('id', id).eq('customer_id', profile.id).eq('status', 'pending')
+    if (error) { toast.error(error.message || 'Failed to cancel'); return }
     toast.success('Booking cancelled')
     setBookings(prev => prev.filter(b => b.id !== id))
   }
@@ -152,6 +162,17 @@ export default function CustomerTrack() {
       <div style={{width:44,height:44,border:'4px solid var(--border)',borderTop:'4px solid #f97316',borderRadius:'50%',animation:'spin 0.8s linear infinite'}}/>
       <p style={{color:'var(--text2)',fontSize:14}}>Loading your booking...</p>
       <style>{`@keyframes spin{to{transform:rotate(360deg)}}`}</style>
+    </div>
+  )
+
+  if (loadError) return (
+    <div style={{ minHeight:'100vh', background:'var(--bg)', display:'flex', alignItems:'center', justifyContent:'center', padding:24 }}>
+      <div className="glass" role="alert" style={{ textAlign:'center', maxWidth:360, padding:28 }}>
+        <p style={{ fontSize:40, marginBottom:12 }}>⚠️</p>
+        <h2 style={{ fontWeight:800, fontSize:20, marginBottom:8 }}>Tracking unavailable</h2>
+        <p style={{ color:'var(--text2)', fontSize:13, lineHeight:1.6, marginBottom:18 }}>{loadError}</p>
+        <button className="btn btn-outline" onClick={() => void load()}>Try again</button>
+      </div>
     </div>
   )
 

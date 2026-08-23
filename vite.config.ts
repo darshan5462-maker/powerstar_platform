@@ -16,6 +16,8 @@ export default defineConfig({
           react:    ['react','react-dom','react-router-dom'],
           supabase: ['@supabase/supabase-js'],
           ui:       ['react-hot-toast','framer-motion'],
+          charts:   ['recharts'],
+          icons:    ['lucide-react'],
         }
       }
     }

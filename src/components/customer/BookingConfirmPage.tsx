@@ -37,37 +37,31 @@ export default function BookingConfirmPage({
   const [bookingOtp, setBookingOtp] = useState('')
 
   async function createBookingRecord() {
-    const { data: cat } = await supabase
+    const { data: cat, error: categoryError } = await supabase
       .from('service_categories').select('id').eq('slug', svc.id).maybeSingle()
+    if (categoryError) throw categoryError
+    if (!cat?.id) throw new Error('This service is no longer available. Please choose another service.')
 
     const { data: booking, error } = await supabase
       .from('bookings')
       .insert({
         customer_id:    profile!.id,
-        category_id:    cat?.id || '00000000-0000-0000-0000-000000000000',
-        address, city: city || district, district,
+        provider_id:    selectedProv?.id ?? null,
+        category_id:    cat.id,
+        address: address.trim(), city: city || district, district,
         base_amount:    price.base,
         platform_fee:   price.fee,
         gst_amount:     price.gst,
         total_amount:   price.total,
-        customer_notes: notes || null,
+        customer_notes: notes.trim() || null,
         status:         'pending',
       })
       .select()
       .single()
 
     if (error) throw error
-
-    // Notify provider
-    if (selectedProv?.id) {
-      await supabase.from('notifications').insert({
-        user_id: selectedProv.id,
-        title:   '🔔 New Job Request!',
-        body:    `${profile!.full_name} needs ${svc.name} in ${district}. ₹${price.total}`,
-        type:    'booking',
-        data:    { booking_id: booking.id },
-      }).then(() => {})
-    }
+    // Provider notifications are created by the database booking trigger so
+    // they cannot be spoofed or silently depend on a second client write.
     return booking
   }
 
@@ -97,7 +91,7 @@ export default function BookingConfirmPage({
         currency:    'INR',
         name:        'POWERSTAR',
         description: `${svc.name} - ${district}`,
-        image:       'https://powerstar-platform-4sap.vercel.app/icon.png',
+        image:       'https://powerstar-platform-4sap.vercel.app/icon-512.png',
         prefill:     { name: profile!.full_name, contact: profile!.phone ?? '' },
         notes:       { booking_id: booking.id },
         theme:       { color: '#f97316' },
@@ -113,9 +107,11 @@ export default function BookingConfirmPage({
           }
         },
         handler: async (response: any) => {
-          await supabase.from('bookings').update({
-            customer_notes: (notes ? notes + ' | ' : '') + `rzp:${response.razorpay_payment_id}`,
-          }).eq('id', booking.id)
+          const { error: paymentError } = await supabase.rpc('mark_payment_held', {
+            p_booking_id: booking.id,
+            p_payment_id: response.razorpay_payment_id,
+          })
+          if (paymentError) throw paymentError
           setBookingRef(booking.booking_ref)
           setBookingOtp(booking.start_otp ?? '----')
           setDone(true)

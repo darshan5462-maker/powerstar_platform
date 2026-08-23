@@ -7,6 +7,9 @@ import AdminKyc       from '@/components/admin/AdminKyc'
 import AdminDisputes  from '@/components/admin/AdminDisputes'
 import AdminServices  from '@/components/admin/AdminServices'
 import AdminSettings  from '@/components/admin/AdminSettings'
+import AdminCustomers from '@/components/admin/AdminCustomers'
+import AdminPayments  from '@/components/admin/AdminPayments'
+import AdminPricing   from '@/components/admin/AdminPricing'
 
 const NAV = [
   { icon:'📊', label:'Dashboard',    path:'/admin',              section:'Analytics' },
@@ -30,6 +33,9 @@ export default function AdminDashboard() {
           <Route index            element={<AdminHome />} />
           <Route path="bookings"  element={<AdminBookings />} />
           <Route path="providers" element={<AdminProviders />} />
+          <Route path="customers" element={<AdminCustomers />} />
+          <Route path="payments"  element={<AdminPayments />} />
+          <Route path="pricing"   element={<AdminPricing />} />
           <Route path="kyc"       element={<AdminKyc />} />
           <Route path="disputes"  element={<AdminDisputes />} />
           <Route path="services"  element={<AdminServices />} />

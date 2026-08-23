@@ -6,12 +6,6 @@ import ThemeToggle from '@/components/ui/ThemeToggle'
 import { DISTRICTS } from '@/data/karnataka'
 import toast from 'react-hot-toast'
 
-const DEMO = [
-  { role:'customer' as Role, email:'customer@demo.com',  pwd:'demo1234',   label:'Customer', icon:'👤', color:'#2563eb' },
-  { role:'provider' as Role, email:'provider@demo.com',  pwd:'demo1234',   label:'Provider', icon:'👷', color:'#16a34a' },
-  { role:'admin'    as Role, email:'admin@powerstar.in', pwd:'Admin@2025!', label:'Admin',   icon:'⚙️', color:'#7c3aed' },
-]
-
 const FEATURES = [
   '4,200+ KYC-verified providers',
   'Live GPS tracking on every booking',
@@ -26,53 +20,41 @@ export default function AuthPage() {
   const { setProfile } = useAuthStore()
   const [mode, setMode]       = useState<'login'|'register'>('login')
   const [regRole, setRegRole] = useState<Role>('customer')
-  const [loading, setLoading] = useState(false)
+    const [loading,      setLoading] = useState(false)
+  const [showPassword, setShowPassword] = useState(false)
   const [form, setForm] = useState({
-    email:'customer@demo.com', password:'demo1234',
+    email:'', password:'',
     full_name:'', phone:'', district:'Bengaluru Urban',
   })
 
   const set = (k:string) => (e:React.ChangeEvent<HTMLInputElement|HTMLSelectElement>) =>
     setForm(f=>({...f,[k]:e.target.value}))
 
-  function fillDemo(d: typeof DEMO[0]) {
-    setMode('login')
-    setForm(f=>({...f, email:d.email, password:d.pwd}))
-    toast(d.label + ' credentials filled', { icon:d.icon, duration:1500 })
-  }
-
   async function handleLogin(e: React.FormEvent) {
     e.preventDefault()
-    if (!form.email || !form.password) { toast.error('Enter email and password'); return }
+    const email = form.email.trim().toLowerCase()
+    if (!email || !form.password) { toast.error('Enter email and password'); return }
     setLoading(true)
     try {
       const { data, error } = await supabase.auth.signInWithPassword({
-        email: form.email.trim(),
+        email,
         password: form.password,
       })
-      if (error) { toast.error(error.message); return }
-      if (!data.user) { toast.error('Login failed'); return }
+      if (error) throw error
+      if (!data.user) throw new Error('Login failed')
 
-      // Fetch or create profile immediately
-      let { data: profile } = await supabase
+      const { data: profile, error: profileError } = await supabase
         .from('profiles').select('*').eq('id', data.user.id).maybeSingle()
-
-      if (!profile) {
-        const role = form.email === 'admin@powerstar.in' ? 'admin'
-          : form.email.includes('provider') ? 'provider' : 'customer'
-        const newP = { id:data.user.id, full_name:form.email.split('@')[0], role, is_active:true, phone:'', district:'Bengaluru Urban' }
-        await supabase.from('profiles').upsert(newP)
-        profile = newP as any
-      }
+      if (profileError) throw profileError
+      if (!profile) throw new Error('Your account profile is not available. Please contact support.')
+      if (profile.is_active === false) throw new Error('This account is inactive. Please contact support.')
 
       setProfile(profile)
       toast.success('Welcome back!')
-
-      // Navigate immediately based on role
-      const dest = profile?.role === 'admin' ? '/admin' : profile?.role === 'provider' ? '/provider' : '/dashboard'
+      const dest = profile.role === 'admin' ? '/admin' : profile.role === 'provider' ? '/provider' : '/dashboard'
       navigate(dest, { replace: true })
-
     } catch (err: any) {
+      await supabase.auth.signOut().catch(() => undefined)
       toast.error(err?.message || 'Login failed')
     } finally {
       setLoading(false)
@@ -81,24 +63,37 @@ export default function AuthPage() {
 
   async function handleRegister(e: React.FormEvent) {
     e.preventDefault()
-    if (!form.full_name || !form.phone || !form.email || !form.password) {
-      toast.error('Please fill all fields'); return
+    const email = form.email.trim().toLowerCase()
+    if (!form.full_name.trim() || !form.phone.trim() || !email || form.password.length < 6) {
+      toast.error('Enter a name, phone, valid email, and a password of at least 6 characters')
+      return
     }
     setLoading(true)
     try {
       const { data, error } = await supabase.auth.signUp({
-        email: form.email.trim(),
+        email,
         password: form.password,
-        options: { data: { full_name:form.full_name, role:regRole, phone:form.phone, district:form.district } },
+        options: { data: { full_name:form.full_name.trim(), role:regRole, phone:form.phone.trim(), district:form.district } },
       })
-      if (error) { toast.error(error.message); return }
-      if (!data.user) { toast.error('Registration failed'); return }
+      if (error) throw error
+      if (!data.user) throw new Error('Registration failed')
 
-      const newP = { id:data.user.id, full_name:form.full_name, role:regRole, phone:form.phone, district:form.district, is_active:true }
-      await supabase.from('profiles').upsert(newP, { onConflict:'id' })
-      setProfile(newP as any)
-      toast.success('Account created! Welcome to POWERSTAR 🎉')
-      navigate(regRole === 'provider' ? '/provider' : '/dashboard', { replace:true })
+      // The database trigger creates the profile. Do not upsert a role from the client.
+      if (!data.session) {
+        toast.success('Account created. Check your email to confirm your account.')
+        setMode('login')
+        setForm(f => ({ ...f, email, password:'' }))
+        return
+      }
+
+      const { data: profile, error: profileError } = await supabase
+        .from('profiles').select('*').eq('id', data.user.id).maybeSingle()
+      if (profileError) throw profileError
+      if (!profile) throw new Error('Account created, but the profile is still being provisioned. Please sign in again.')
+
+      setProfile(profile)
+      toast.success('Account created! Welcome to POWERSTAR')
+      navigate(profile.role === 'provider' ? '/provider' : '/dashboard', { replace:true })
     } catch (err: any) {
       toast.error(err?.message || 'Registration failed')
     } finally {
@@ -166,24 +161,6 @@ export default function AuthPage() {
             {mode==='login'?'Sign in to continue to POWERSTAR':'Join thousands of users across Karnataka'}
           </p>
 
-          {/* Demo buttons */}
-          {mode==='login' && (
-            <div style={{marginBottom:18}}>
-              <p style={{fontSize:10,fontWeight:700,color:'var(--text3)',textTransform:'uppercase',letterSpacing:'0.8px',marginBottom:8}}>Quick demo</p>
-              <div style={{display:'flex',gap:8}}>
-                {DEMO.map(d=>(
-                  <button key={d.role} onClick={()=>fillDemo(d)}
-                    style={{flex:1,padding:'10px 6px',borderRadius:10,border:'1.5px solid var(--border)',background:'var(--bg2)',cursor:'pointer',fontFamily:'Inter,sans-serif',transition:'all 0.15s'}}
-                    onMouseEnter={e=>{const el=e.currentTarget as HTMLElement;el.style.borderColor=d.color;el.style.background='var(--card)'}}
-                    onMouseLeave={e=>{const el=e.currentTarget as HTMLElement;el.style.borderColor='var(--border)';el.style.background='var(--bg2)'}}>
-                    <div style={{fontSize:18,marginBottom:3}}>{d.icon}</div>
-                    <div style={{fontSize:11,fontWeight:600,color:'var(--text)'}}>{d.label}</div>
-                  </button>
-                ))}
-              </div>
-            </div>
-          )}
-
           {/* Role tabs register */}
           {mode==='register' && (
             <div style={{marginBottom:16}}>
@@ -207,7 +184,13 @@ export default function AuthPage() {
               <div><label className="input-label">Phone *</label><input className="input" placeholder="+91 98765 43210" value={form.phone} onChange={set('phone')} required /></div>
             </>}
             <div><label className="input-label">Email *</label><input className="input" type="email" placeholder="you@example.com" value={form.email} onChange={set('email')} required /></div>
-            <div><label className="input-label">Password *</label><input className="input" type="password" placeholder="Min 6 characters" value={form.password} onChange={set('password')} required minLength={6} /></div>
+            <div>
+              <label className="input-label" htmlFor="auth-password">Password *</label>
+              <div style={{ position:'relative' }}>
+                <input id="auth-password" className="input" style={{ paddingRight:78 }} type={showPassword ? 'text' : 'password'} placeholder="Min 6 characters" value={form.password} onChange={set('password')} required minLength={6} autoComplete={mode==='login' ? 'current-password' : 'new-password'} />
+                <button type="button" className="btn btn-ghost btn-sm" onClick={() => setShowPassword(v => !v)} style={{ position:'absolute', right:6, top:5, padding:'5px 8px' }} aria-label={showPassword ? 'Hide password' : 'Show password'}>{showPassword ? 'Hide' : 'Show'}</button>
+              </div>
+            </div>
             {mode==='register' && (
               <div>
                 <label className="input-label">District *</label>

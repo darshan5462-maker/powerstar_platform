@@ -16,7 +16,7 @@ export default function AdminKyc() {
     // Get providers who have submitted KYC
     const { data: provs } = await supabase
       .from('providers')
-      .select('id, kyc_status, kyc_documents')
+      .select('id, kyc_status, aadhaar_url, selfie_url, certificate_url, bank_passbook_url')
       .eq('kyc_status', 'submitted')
 
     if (!provs || provs.length === 0) { setProviders([]); setLoading(false); return }
@@ -35,22 +35,20 @@ export default function AdminKyc() {
       profile: profileMap[p.id] ?? {},
     }))
 
-    // For each provider, list their files in storage
+    // Provider records store private object paths. Create short-lived signed URLs
+    // only for the admin review session.
     const withDocs = await Promise.all(merged.map(async (p) => {
-      const { data: files } = await supabase.storage
-        .from('kyc-documents')
-        .list(p.id, { limit: 20 })
-
-      const docs = (files ?? []).map(f => {
-        const { data: urlData } = supabase.storage
-          .from('kyc-documents')
-          .getPublicUrl(`${p.id}/${f.name}`)
-        return {
-          name: f.name,
-          url:  urlData.publicUrl,
-          label: getLabel(f.name),
-        }
-      })
+      const paths = [
+        ['aadhaar', p.aadhaar_url],
+        ['selfie', p.selfie_url],
+        ['certificate', p.certificate_url],
+        ['bank', p.bank_passbook_url],
+      ] as const
+      const docs = (await Promise.all(paths.filter(([, path]) => Boolean(path)).map(async ([type, path]) => {
+        const { data, error } = await supabase.storage.from('kyc-documents').createSignedUrl(path as string, 600)
+        if (error || !data?.signedUrl) return null
+        return { name: `${type}.${String(path).split('.').pop() ?? 'file'}`, url: data.signedUrl, label: getLabel(type) }
+      }))).filter(Boolean)
 
       return { ...p, docs }
     }))
@@ -201,7 +199,7 @@ export default function AdminKyc() {
             <div style={{ flex:1, overflow:'auto', display:'flex', alignItems:'center', justifyContent:'center', padding:20, background:'var(--bg2)', minHeight:300 }}>
               {viewing.url.match(/\.(jpg|jpeg|png|webp)$/i) ? (
                 <img src={viewing.url} alt={viewing.label} style={{ maxWidth:'100%', maxHeight:'70vh', borderRadius:10, objectFit:'contain' }}
-                  onError={() => toast.error('Could not load image — check if bucket is public')} />
+                  onError={() => toast.error('Could not load private document. Refresh and try again.')} />
               ) : (
                 <iframe src={viewing.url} style={{ width:'100%', height:'70vh', border:'none', borderRadius:10 }} title={viewing.label} />
               )}

@@ -5,6 +5,7 @@ import ProviderJobs          from '@/components/provider/ProviderJobs'
 import ProviderEarnings      from '@/components/provider/ProviderEarnings'
 import ProviderKyc           from '@/components/provider/ProviderKyc'
 import ProviderProfile       from '@/components/provider/ProviderProfile'
+import ProviderReviews       from '@/components/provider/ProviderReviews'
 import { ProviderMobileNav } from '@/components/layout/MobileNav'
 
 const NAV = [
@@ -25,10 +26,13 @@ export default function ProviderDashboard() {
         <Routes>
           <Route index           element={<ProviderHome />}     />
           <Route path="jobs"     element={<ProviderJobs />}     />
-          <Route path="myjobs"   element={<ProviderJobs />}     />
+                    <Route path="myjobs"   element={<ProviderJobs myJobs />} />
+
           <Route path="earnings" element={<ProviderEarnings />} />
-          <Route path="kyc"      element={<ProviderKyc />}      />
+                    <Route path="kyc"      element={<ProviderKyc />} />
+          <Route path="reviews"  element={<ProviderReviews />} />
           <Route path="profile"  element={<ProviderProfile />}  />
+
           <Route path="*"        element={<ProviderHome />}     />
         </Routes>
       </main>

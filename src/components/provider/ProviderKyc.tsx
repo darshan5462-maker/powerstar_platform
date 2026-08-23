@@ -36,8 +36,14 @@ export default function ProviderKyc() {
 
   async function handleUpload(type: DocType, file: File) {
     if (!profile?.id) return
-    if (file.size > 5 * 1024 * 1024) {
-      toast.error('File too large. Max 5MB allowed.')
+    const maxBytes = type === 'selfie' ? 2 * 1024 * 1024 : 5 * 1024 * 1024
+    const allowed = type === 'selfie' ? ['image/jpeg', 'image/png'] : ['image/jpeg', 'image/png', 'application/pdf']
+    if (!allowed.includes(file.type)) {
+      toast.error(type === 'selfie' ? 'Selfie must be a JPG or PNG image.' : 'Upload a JPG, PNG, or PDF file.')
+      return
+    }
+    if (file.size > maxBytes) {
+      toast.error(`File too large. Max ${type === 'selfie' ? '2MB' : '5MB'} allowed.`)
       return
     }
     setUploading(type)
@@ -48,7 +54,6 @@ export default function ProviderKyc() {
       const updated = await getProviderProfile(profile.id)
       setProviderData(updated)
     } catch (err: any) {
-      console.error('KYC upload failed:', err)
       toast.error(
         err?.message?.includes('Bucket not found')
           ? 'Storage not set up yet. Contact admin to create the kyc-documents bucket in Supabase.'
@@ -64,13 +69,18 @@ export default function ProviderKyc() {
   const kycStatus   = providerData?.kyc_status ?? 'pending'
 
   async function submitForReview() {
-    if (!profile?.id) return
+    if (!profile?.id || !allUploaded) return
     const { supabase } = await import('@/lib/supabase')
-    await supabase.from('providers')
-      .upsert({ id: profile.id, kyc_status: 'submitted' }, { onConflict: 'id' })
-    const updated = await getProviderProfile(profile.id)
-    setProviderData(updated)
-    toast.success('Documents submitted! Admin will review within 24 hours.')
+    try {
+      const { error } = await supabase.from('providers')
+        .upsert({ id: profile.id, kyc_status: 'submitted' }, { onConflict: 'id' })
+      if (error) throw error
+      const updated = await getProviderProfile(profile.id)
+      setProviderData(updated)
+      toast.success('Documents submitted! Admin will review within 24 hours.')
+    } catch (err: any) {
+      toast.error(err?.message || 'Could not submit documents')
+    }
   }
 
   return (
@@ -134,7 +144,7 @@ export default function ProviderKyc() {
               onMouseLeave={e => { (e.currentTarget as HTMLElement).style.borderColor = uploaded[doc.type] ? '#16a34a' : 'var(--border)' }}
             >
               <input
-                type="file" accept=".jpg,.jpeg,.png,.pdf" style={{ display:'none' }}
+                type="file" accept={doc.type === 'selfie' ? '.jpg,.jpeg,.png' : '.jpg,.jpeg,.png,.pdf'} style={{ display:'none' }}
                 disabled={!!uploading || kycStatus === 'verified'}
                 onChange={e => { if (e.target.files?.[0]) handleUpload(doc.type, e.target.files[0]) }}
               />

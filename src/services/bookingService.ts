@@ -67,11 +67,57 @@ export async function acceptBooking(bookingId: string, providerId: string) {
 
 export async function updateBookingStatus(bookingId: string, status: string) {
   const updates: Record<string, string> = { status }
-  if (status === 'active')    updates.started_at   = new Date().toISOString()
+  if (status === 'active')    updates.started_at = new Date().toISOString()
   if (status === 'completed') updates.completed_at = new Date().toISOString()
   if (status === 'cancelled') updates.cancelled_at = new Date().toISOString()
   const { data, error } = await supabase.from('bookings').update(updates).eq('id', bookingId).select().single()
   if (error) throw error
+  return data
+}
+
+export async function cancelCustomerBooking(bookingId: string, customerId: string) {
+  const { data, error } = await supabase
+    .from('bookings')
+    .update({ status: 'cancelled', cancelled_at: new Date().toISOString(), cancellation_reason: 'Cancelled by customer' })
+    .eq('id', bookingId)
+    .eq('customer_id', customerId)
+    .eq('status', 'pending')
+    .select()
+    .maybeSingle()
+  if (error) throw error
+  if (!data) throw new Error('This booking can no longer be cancelled.')
+  return data
+}
+
+export async function declineBooking(bookingId: string, providerId: string) {
+  const { data, error } = await supabase
+    .from('bookings')
+    .update({
+      provider_id: providerId,
+      status: 'cancelled',
+      cancelled_at: new Date().toISOString(),
+      cancellation_reason: 'Declined by provider',
+    })
+    .eq('id', bookingId)
+    .eq('status', 'pending')
+    .select()
+    .maybeSingle()
+  if (error) throw error
+  if (!data) throw new Error('This request is no longer available.')
+  return data
+}
+
+export async function completeProviderBooking(bookingId: string, providerId: string) {
+  const { data, error } = await supabase
+    .from('bookings')
+    .update({ status: 'completed', completed_at: new Date().toISOString() })
+    .eq('id', bookingId)
+    .eq('provider_id', providerId)
+    .in('status', ['accepted', 'active'])
+    .select()
+    .maybeSingle()
+  if (error) throw error
+  if (!data) throw new Error('This booking is not assigned to you or is already closed.')
   return data
 }
 
@@ -80,7 +126,7 @@ export async function getAllBookingsAdmin() {
     .from('bookings')
     .select(`
       *,
-      category:service_categories(name,icon),
+      category:service_categories(name,icon,type),
       customer:profiles!bookings_customer_id_fkey(full_name,phone),
       provider:providers(profile:profiles(full_name))
     `)
@@ -187,17 +233,23 @@ export async function getProviderProfile(profileId: string) {
 }
 
 export async function uploadKycDoc(providerId: string, file: File, docType: string) {
-  const ext  = file.name.split('.').pop()
-  const path = `${providerId}/${docType}.${ext}`
-  const { error: upErr } = await supabase.storage.from('kyc-documents').upload(path, file, { upsert: true })
-  if (upErr) throw upErr
-  const { data: { publicUrl } } = supabase.storage.from('kyc-documents').getPublicUrl(path)
+  const ext = file.name.split('.').pop()?.toLowerCase().replace(/[^a-z0-9]/g, '')
   const fieldMap: Record<string,string> = {
     aadhaar: 'aadhaar_url', selfie: 'selfie_url',
     certificate: 'certificate_url', bank: 'bank_passbook_url',
   }
-  await supabase.from('providers').upsert({ id: providerId, [fieldMap[docType]]: publicUrl, kyc_status: 'submitted' }, { onConflict: 'id' })
-  return publicUrl
+  const field = fieldMap[docType]
+  if (!field || !ext) throw new Error('Unsupported document type')
+  const path = `${providerId}/${docType}.${ext}`
+  const { error: upErr } = await supabase.storage.from('kyc-documents').upload(path, file, { upsert: true })
+  if (upErr) throw upErr
+
+  // The bucket is private. Persist the object path, not a public URL.
+  const { error: providerError } = await supabase.from('providers').upsert({
+    id: providerId, [field]: path, kyc_status: 'submitted',
+  }, { onConflict: 'id' })
+  if (providerError) throw providerError
+  return path
 }
 
 // ── NOTIFICATIONS ─────────────────────────────────────────────

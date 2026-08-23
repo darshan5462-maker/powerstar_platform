@@ -10,55 +10,57 @@ import { DISTRICTS, getCities } from '@/data/karnataka'
 import toast from 'react-hot-toast'
 
 async function fetchProviders(district: string, categorySlug?: string) {
-  // Fetch all verified + online providers with their profile and category
-  const { data: provs, error } = await supabase
-    .from('providers')
-    .select(`
-      id, kyc_status, is_online, hourly_rate, rating, total_jobs, experience_years,
-      profile:profiles!inner(full_name, phone, district, city),
-      category:service_categories(name, icon, slug, base_price, price_unit)
-    `)
-    .eq('kyc_status', 'verified')
+  // The view exposes only directory-safe provider fields.
+  let { data: rows, error } = await supabase
+    .from('public_provider_directory')
+    .select('*')
     .eq('is_online', true)
+    .order('rating', { ascending: false })
+
+  // Keep the current deployment compatible until the additive view migration
+  // reaches Supabase's schema cache. The fallback requests safe columns only.
+  if (error && ['PGRST205', '42P01'].includes(error.code ?? '')) {
+    const fallback = await supabase
+      .from('providers')
+      .select('id,kyc_status,is_online,hourly_rate,rating,total_jobs,experience_years,profile:profiles!inner(full_name,district,city),category:service_categories(name,icon,slug,base_price,price_unit)')
+      .eq('kyc_status', 'verified')
+      .eq('is_online', true)
+      .order('rating', { ascending: false })
+    rows = (fallback.data ?? []).map((p: any) => ({
+      id:p.id, kyc_status:p.kyc_status, is_online:p.is_online, hourly_rate:p.hourly_rate,
+      rating:p.rating, total_jobs:p.total_jobs, experience_years:p.experience_years,
+      full_name:p.profile?.full_name, district:p.profile?.district, city:p.profile?.city,
+      category_name:p.category?.name, category_icon:p.category?.icon,
+      category_slug:p.category?.slug, base_price:p.category?.base_price, price_unit:p.category?.price_unit,
+    }))
+    error = fallback.error
+  }
 
   if (error) throw error
 
-  const all = provs ?? []
   const norm = (s?: string) => (s ?? '').trim().toLowerCase()
-
-  // Filter by district — case insensitive
+  const all = (rows ?? []).map((p: any) => ({
+    id: p.id,
+    kyc_status: p.kyc_status,
+    is_online: p.is_online,
+    hourly_rate: p.hourly_rate,
+    rating: p.rating,
+    total_jobs: p.total_jobs,
+    experience_years: p.experience_years,
+    profile: { full_name: p.full_name, district: p.district, city: p.city },
+    category: { name: p.category_name, icon: p.category_icon, slug: p.category_slug, base_price: p.base_price, price_unit: p.price_unit },
+  }))
   const inDistrict = all.filter((p: any) => norm(p.profile?.district) === norm(district))
-
-  console.log('🔍 Provider search:', {
-    district,
-    categorySlug,
-    totalVerifiedOnline: all.length,
-    inDistrict: inDistrict.length,
-    allDistricts: [...new Set(all.map((p: any) => p.profile?.district))],
-  })
 
   if (inDistrict.length === 0) {
     const available = [...new Set(all.map((p: any) => p.profile?.district).filter(Boolean))]
-    return {
-      providers: [],
-      reason: `district_mismatch`,
-      availableDistricts: available,
-      totalOnline: all.length,
-    }
+    return { providers: [], reason: 'district_mismatch', availableDistricts: available, totalOnline: all.length }
   }
 
-  // Try category match — but DON'T filter out if no match, show all district providers
   if (categorySlug) {
-    const inCategory = inDistrict.filter((p: any) =>
-      norm(p.category?.slug) === norm(categorySlug)
-    )
+    const inCategory = inDistrict.filter((p: any) => norm(p.category?.slug) === norm(categorySlug))
     if (inCategory.length > 0) return { providers: inCategory }
-    // Category doesn't match — show all district providers with a note
-    return {
-      providers: inDistrict,
-      reason: 'category_mismatch',
-      categorySlug,
-    }
+    return { providers: inDistrict, reason: 'category_mismatch', categorySlug }
   }
 
   return { providers: inDistrict }

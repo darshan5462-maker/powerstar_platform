@@ -127,8 +127,8 @@ This creates all these automatically:
 2. Click "Users" tab
 3. Click "Add user" button → "Create new user"
 4. Fill in:
-   Email:           admin@powerstar.in
-   Password:        Admin@2025!
+   Email:           <your-admin-email>
+   Password:        <set-a-strong-password-out-of-band>
    Auto Confirm:    ✅ YES (toggle on)
 5. Click "Create user"
 
@@ -137,7 +137,7 @@ This creates all these automatically:
 
 UPDATE profiles
 SET role = 'admin', full_name = 'POWERSTAR Admin'
-WHERE id = (SELECT id FROM auth.users WHERE email = 'admin@powerstar.in');
+WHERE id = (SELECT id FROM auth.users WHERE email = '<your-admin-email>');
 
 8. You should see: "Success. 1 row affected" ✅
 
@@ -162,21 +162,21 @@ Open browser: http://localhost:5173
 Login with these demo credentials:
 
   👤 CUSTOMER:
-     Email:    customer@demo.com
-     Password: demo1234
+     Email:    <local-customer-test-email>
+     Password: <local-test-password>
      (Register first with this email, then it works)
 
   👷 PROVIDER:
-     Email:    provider@demo.com
-     Password: demo1234
+     Email:    <local-provider-test-email>
+     Password: <local-test-password>
      (Register first as Provider role)
 
   ⚙️ ADMIN:
-     Email:    admin@powerstar.in
-     Password: Admin@2025!
+     Email:    <your-admin-email>
+     Password: <set-a-strong-password-out-of-band>
      (Created in Step 7 above)
 
-On the login page there are "Quick Demo" buttons that auto-fill credentials!
+The production login page intentionally does not include credential autofill buttons. Keep local test credentials in a private environment or password manager.
 
 ---
 

@@ -32,7 +32,7 @@ export function useAuth() {
     return () => subscription.unsubscribe()
   }, [])
 
-  async function loadProfile(userId: string, email?: string | null) {
+  async function loadProfile(userId: string, _email?: string | null) {
     try {
       const { data, error } = await supabase
         .from('profiles')
@@ -40,44 +40,17 @@ export function useAuth() {
         .eq('id', userId)
         .maybeSingle()
 
-      if (data) {
-        setProfile(data)
+      if (error) throw error
+      if (!data || data.is_active === false) {
+        reset()
         return
       }
 
-      // Profile missing — create it on the fly
-      const guessedRole =
-        email === 'admin@powerstar.in' ? 'admin' :
-        email?.includes('provider') ? 'provider' : 'customer'
-
-      const fallback = {
-        id: userId,
-        role: guessedRole as 'customer' | 'provider' | 'admin',
-        full_name: email?.split('@')[0] || 'User',
-        is_active: true,
-      }
-
-      // Try inserting the missing profile
-      const { data: inserted } = await supabase
-        .from('profiles')
-        .insert(fallback)
-        .select()
-        .single()
-
-      setProfile(inserted ?? fallback)
-
+      // Roles are trusted only after they are read from the protected profile row.
+      setProfile(data)
     } catch {
-      // Absolute fallback — never block the user
-      const guessedRole =
-        email === 'admin@powerstar.in' ? 'admin' :
-        email?.includes('provider') ? 'provider' : 'customer'
-
-      setProfile({
-        id: userId,
-        role: guessedRole as 'customer' | 'provider' | 'admin',
-        full_name: email?.split('@')[0] || 'User',
-        is_active: true,
-      })
+      // Do not create a local fallback profile: that could grant an unverified role.
+      reset()
     }
   }
 

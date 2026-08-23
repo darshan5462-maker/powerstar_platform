@@ -1,6 +1,6 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { useAuthStore } from '@/store/authStore'
-import { getProviderBookings, getAvailableBookings, acceptBooking, updateBookingStatus } from '@/services/bookingService'
+import { getProviderBookings, getAvailableBookings, acceptBooking, declineBooking, completeProviderBooking } from '@/services/bookingService'
 import PageHeader from '@/components/layout/PageHeader'
 import { StatusBadge } from '@/components/ui/Badge'
 import Avatar from '@/components/ui/Avatar'
@@ -10,14 +10,26 @@ export default function ProviderJobs({ myJobs = false }: { myJobs?: boolean }) {
   const { profile } = useAuthStore()
   const [data,    setData]    = useState<any[]>([])
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
 
-  useEffect(() => {
+  const load = useCallback(async () => {
     if (!profile?.id) return
-    const fetch = myJobs
-      ? getProviderBookings(profile.id)
-      : getAvailableBookings(profile.district || 'Bengaluru Urban')
-    fetch.then(d => { setData(d); setLoading(false) })
-  }, [profile?.id, myJobs])
+    setLoading(true)
+    setError(null)
+    try {
+      const rows = myJobs
+        ? await getProviderBookings(profile.id)
+        : await getAvailableBookings(profile.district || 'Bengaluru Urban')
+      setData(rows)
+    } catch {
+      setError('Jobs could not be loaded right now.')
+      setData([])
+    } finally {
+      setLoading(false)
+    }
+  }, [profile?.id, profile?.district, myJobs])
+
+  useEffect(() => { void load() }, [load])
 
   async function accept(bookingId: string) {
     if (!profile?.id) return
@@ -29,11 +41,21 @@ export default function ProviderJobs({ myJobs = false }: { myJobs?: boolean }) {
   }
 
   async function complete(bookingId: string) {
+    if (!profile?.id || !window.confirm('Mark this job as completed?')) return
     try {
-      await updateBookingStatus(bookingId, 'completed')
+      await completeProviderBooking(bookingId, profile.id)
       setData(prev => prev.map(j => j.id===bookingId ? { ...j, status:'completed' } : j))
       toast.success('Job completed! Payment will be settled in 24 hrs.')
-    } catch { toast.error('Failed to update status') }
+    } catch (err: any) { toast.error(err?.message || 'Failed to update status') }
+  }
+
+  async function decline(bookingId: string) {
+    if (!profile?.id || !window.confirm('Decline this request? It will be released from your request list.')) return
+    try {
+      await declineBooking(bookingId, profile.id)
+      setData(prev => prev.filter(row => row.id !== bookingId))
+      toast.success('Request declined')
+    } catch (err: any) { toast.error(err?.message || 'Request is no longer available') }
   }
 
   return (
@@ -43,10 +65,17 @@ export default function ProviderJobs({ myJobs = false }: { myJobs?: boolean }) {
         subtitle={myJobs
           ? `${data.length} total jobs in your history`
           : `New requests in ${profile?.district || 'your district'}`}
+        action={<button className="btn btn-outline btn-sm" onClick={() => void load()} disabled={loading}>↻ Refresh</button>}
       />
       <div className="page-content">
         {loading ? (
           <div style={{ padding:48, textAlign:'center', color:'var(--text3)' }}>Loading...</div>
+        ) : error ? (
+          <div className="glass" style={{ padding:48, textAlign:'center' }} role="alert">
+            <p style={{ fontSize:30, marginBottom:10 }}>⚠️</p>
+            <p style={{ fontWeight:600, marginBottom:12 }}>{error}</p>
+            <button className="btn btn-outline btn-sm" onClick={() => void load()}>Try again</button>
+          </div>
         ) : data.length === 0 ? (
           <div className="glass" style={{ padding:48, textAlign:'center' }}>
             <p style={{ fontSize:36, marginBottom:10 }}>{myJobs ? '📋' : '📭'}</p>
@@ -120,7 +149,7 @@ export default function ProviderJobs({ myJobs = false }: { myJobs?: boolean }) {
                 )}
                 <div style={{ display:'flex', gap:8 }}>
                   <button className="btn btn-success" style={{ flex:2 }} onClick={() => accept(r.id)}>✓ Accept Job</button>
-                  <button className="btn btn-outline" style={{ flex:1 }} onClick={() => toast('Job declined', { icon:'❌' })}>Decline</button>
+                  <button className="btn btn-outline" style={{ flex:1 }} onClick={() => void decline(r.id)}>Decline</button>
                 </div>
               </div>
             ))}

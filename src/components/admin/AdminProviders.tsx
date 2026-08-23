@@ -1,15 +1,11 @@
 import { useEffect, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
 import { supabase } from '@/lib/supabase'
-import { useAuthStore } from '@/store/authStore'
 import PageHeader from '@/components/layout/PageHeader'
 import { StatusBadge } from '@/components/ui/Badge'
 import Avatar from '@/components/ui/Avatar'
 import toast from 'react-hot-toast'
 
 export default function AdminProviders() {
-  const navigate = useNavigate()
-  const setViewAsRole = useAuthStore(s => s.setViewAsRole)
   const [providers, setProviders] = useState<any[]>([])
   const [loading,   setLoading]   = useState(true)
   const [search,    setSearch]    = useState('')
@@ -135,12 +131,6 @@ export default function AdminProviders() {
     toast.success(`${name} ${!currentActive ? 'reactivated' : 'suspended'}`)
   }
 
-  function previewAsProvider() {
-    setViewAsRole('provider')
-    navigate('/provider')
-    toast('Previewing Provider dashboard', { icon: '👁️' })
-  }
-
   const counts = {
     total:    providers.length,
     verified: providers.filter(p => p.kyc_status === 'verified').length,
@@ -155,7 +145,6 @@ export default function AdminProviders() {
         subtitle={`${providers.length} total providers`}
         action={
           <div style={{ display:'flex', gap:8 }}>
-            <button className="btn btn-outline btn-sm" onClick={previewAsProvider}>👁️ View as Provider</button>
             <button className="btn btn-outline btn-sm" onClick={load}>↻ Refresh</button>
           </div>
         }

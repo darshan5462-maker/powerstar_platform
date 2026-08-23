@@ -12,6 +12,7 @@ export default function ProviderProfile() {
   const [saving,      setSaving]      = useState(false)
   const [categories,  setCategories]  = useState<any[]>([])
   const [myServices,  setMyServices]  = useState<any[]>([])
+  const [loadError,   setLoadError]   = useState<string | null>(null)
   const [addingCat,   setAddingCat]   = useState('')
   const [addingRate,  setAddingRate]  = useState('290')
   const [addingExp,   setAddingExp]   = useState('3')
@@ -31,63 +32,83 @@ export default function ProviderProfile() {
 
   async function loadData() {
     if (!profile?.id) return
-    const [cats, svc] = await Promise.all([
-      supabase.from('service_categories')
-        .select('id,name,icon,type,base_price,price_unit')
-        .in('type', ['manpower','vehicle'])
-        .order('sort_order'),
-      supabase.from('provider_services')
-        .select('*, category:service_categories(name,icon,price_unit)')
-        .eq('provider_id', profile.id),
-    ])
-    setCategories(cats.data ?? [])
-    // If provider_services table doesn't exist yet, fall back to providers.category_id
-    if (svc.error && svc.error.code === '42P01') {
-      const { data: provRow } = await supabase
-        .from('providers').select('category_id, hourly_rate, experience_years, category:service_categories(name,icon,price_unit)')
-        .eq('id', profile.id).maybeSingle()
-      if (provRow?.category_id) {
-        setMyServices([{ id: 'legacy', category_id: provRow.category_id, hourly_rate: provRow.hourly_rate, experience_years: provRow.experience_years, category: provRow.category }])
+    setLoadError(null)
+    try {
+      const [cats, svc] = await Promise.all([
+        supabase.from('service_categories')
+          .select('id,name,icon,type,base_price,price_unit')
+          .in('type', ['manpower','vehicle'])
+          .order('sort_order'),
+        supabase.from('provider_services')
+          .select('*, category:service_categories(name,icon,price_unit)')
+          .eq('provider_id', profile.id),
+      ])
+      if (cats.error) throw cats.error
+      setCategories(cats.data ?? [])
+      // Keep compatibility with an older database until the additive migration is applied.
+      if (svc.error && svc.error.code === '42P01') {
+        const { data: provRow, error: providerError } = await supabase
+          .from('providers').select('category_id, hourly_rate, experience_years, category:service_categories(name,icon,price_unit)')
+          .eq('id', profile.id).maybeSingle()
+        if (providerError) throw providerError
+        setMyServices(provRow?.category_id ? [{ id: 'legacy', category_id: provRow.category_id, hourly_rate: provRow.hourly_rate, experience_years: provRow.experience_years, category: provRow.category }] : [])
+      } else {
+        if (svc.error) throw svc.error
+        setMyServices(svc.data ?? [])
       }
-    } else {
-      setMyServices(svc.data ?? [])
+    } catch {
+      setLoadError('Profile services could not be loaded right now.')
+      setCategories([])
+      setMyServices([])
     }
   }
 
   async function addService() {
     if (!profile?.id || !addingCat) { toast.error('Select a service'); return }
     if (myServices.find(s => s.category_id === addingCat)) { toast.error('Service already added'); return }
+    const rate = Number(addingRate)
+    const experience = Number(addingExp)
+    if (!Number.isFinite(rate) || rate < 50 || !Number.isFinite(experience) || experience < 0) {
+      toast.error('Enter a valid rate and experience')
+      return
+    }
 
     // Try provider_services table first
     const { error } = await supabase.from('provider_services').insert({
       provider_id: profile.id, category_id: addingCat,
-      hourly_rate: Number(addingRate), experience_years: Number(addingExp),
+      hourly_rate: rate, experience_years: experience,
     })
-    if (error) {
-      // Table doesn't exist — update providers table directly
-      await supabase.from('providers').upsert({
+    if (error && error.code === '42P01') {
+      // Legacy compatibility only: fall back when the additive table is absent.
+      const { error: providerError } = await supabase.from('providers').upsert({
         id: profile.id, category_id: addingCat,
-        hourly_rate: Number(addingRate), experience_years: Number(addingExp),
+        hourly_rate: rate, experience_years: experience,
       }, { onConflict: 'id' })
+      if (providerError) throw providerError
       toast.success('Service updated!')
+    } else if (error) {
+      throw error
     } else {
-      // Also update primary category if first service
+      // Also update primary category if first service.
       if (myServices.length === 0) {
-        await supabase.from('providers').upsert({
-          id: profile.id, category_id: addingCat, hourly_rate: Number(addingRate),
+        const { error: providerError } = await supabase.from('providers').upsert({
+          id: profile.id, category_id: addingCat, hourly_rate: rate,
         }, { onConflict: 'id' })
+        if (providerError) throw providerError
       }
       toast.success('Service added!')
     }
     setAddingCat('')
-    loadData()
+    void loadData()
   }
 
   async function removeService(id: string) {
     if (id === 'legacy') { toast.error("Can't remove primary service — update it instead"); return }
-    await supabase.from('provider_services').delete().eq('id', id)
+    if (!window.confirm('Remove this service from your provider profile?')) return
+    const { error } = await supabase.from('provider_services').delete().eq('id', id).eq('provider_id', profile?.id)
+    if (error) { toast.error(error.message || 'Could not remove service'); return }
     toast.success('Service removed')
-    loadData()
+    void loadData()
   }
 
   async function saveProfile() {
@@ -96,8 +117,9 @@ export default function ProviderProfile() {
     try {
       const updated = await updateProfile(profile.id, form)
       setProfile({ ...profile, ...updated })
-      // Also update provider district
-      await supabase.from('providers').upsert({ id: profile.id }, { onConflict: 'id' })
+      // Ensure the provider row exists without overwriting KYC or online state.
+      const { error: providerError } = await supabase.from('providers').upsert({ id: profile.id }, { onConflict: 'id' })
+      if (providerError) throw providerError
       toast.success('Profile saved!')
     } catch (err: any) { toast.error(err?.message || 'Save failed') }
     finally { setSaving(false) }
@@ -145,6 +167,8 @@ export default function ProviderProfile() {
               {saving ? 'Saving...' : 'Save Profile'}
             </button>
           </div>
+
+          {loadError && <div className="glass" role="alert" style={{ padding:14, marginBottom:16, color:'#b91c1c', background:'rgba(220,38,38,0.05)' }}>{loadError} <button className="btn btn-outline btn-sm" style={{ marginLeft:8 }} onClick={() => void loadData()}>Try again</button></div>}
 
           {/* My Services — multi-service management */}
           <div className="glass" style={{ padding:22, marginBottom:16 }}>

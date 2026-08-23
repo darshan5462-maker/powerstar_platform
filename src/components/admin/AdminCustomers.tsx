@@ -1,14 +1,10 @@
 import { useEffect, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
 import { supabase } from '@/lib/supabase'
-import { useAuthStore } from '@/store/authStore'
 import PageHeader from '@/components/layout/PageHeader'
 import Avatar from '@/components/ui/Avatar'
 import toast from 'react-hot-toast'
 
 export default function AdminCustomers() {
-  const navigate = useNavigate()
-  const setViewAsRole = useAuthStore(s => s.setViewAsRole)
   const [customers, setCustomers] = useState<any[]>([])
   const [loading,   setLoading]   = useState(true)
   const [search,    setSearch]    = useState('')
@@ -24,12 +20,6 @@ export default function AdminCustomers() {
       .order('created_at', { ascending: false })
     setCustomers(data ?? [])
     setLoading(false)
-  }
-
-  function previewAsCustomer() {
-    setViewAsRole('customer')
-    navigate('/dashboard')
-    toast('Previewing Customer dashboard', { icon: '👁️' })
   }
 
   const filtered = customers.filter(c => {
@@ -51,7 +41,6 @@ export default function AdminCustomers() {
         subtitle={`${customers.length} total customers`}
         action={
           <div style={{ display:'flex', gap:8 }}>
-            <button className="btn btn-outline btn-sm" onClick={previewAsCustomer}>👁️ View as Customer</button>
             <button className="btn btn-outline btn-sm" onClick={load}>↻ Refresh</button>
           </div>
         }

@@ -1,6 +1,6 @@
 import { Routes, Route, Navigate, useNavigate } from 'react-router-dom'
 import { useEffect, useState } from 'react'
-import { supabase } from './lib/supabase'
+import { isSupabaseConfigured, supabase } from './lib/supabase'
 import { useAuthStore } from './store/authStore'
 
 import LandingPage       from './pages/LandingPage'
@@ -51,48 +51,43 @@ export default function App() {
     return () => subscription.unsubscribe()
   }, [])
 
-  async function resolveProfile(userId: string, email: string) {
+  async function resolveProfile(userId: string, _email: string) {
     try {
-      const { data } = await supabase
+      const { data, error } = await supabase
         .from('profiles')
         .select('*')
         .eq('id', userId)
         .maybeSingle()
 
-      if (data) {
-        setProfile(data)
+      if (error) throw error
+
+      // Never infer or create a role on the client. The database trigger/policy
+      // is the source of truth for identity and authorization.
+      if (!data || data.is_active === false) {
+        setProfile(null)
         return
       }
 
-      // Profile missing — auto-detect role and create
-      const role = email === 'admin@powerstar.in' ? 'admin'
-        : email.includes('provider') ? 'provider' : 'customer'
-
-      const newProfile = {
-        id: userId,
-        full_name: email.split('@')[0],
-        role: role as 'customer' | 'provider' | 'admin',
-        is_active: true,
-        phone: '',
-        district: 'Bengaluru Urban',
-      }
-
-      await supabase.from('profiles').upsert(newProfile)
-      setProfile(newProfile)
+      setProfile(data)
     } catch {
-      // Fallback — never block user
-      const role = email === 'admin@powerstar.in' ? 'admin'
-        : email.includes('provider') ? 'provider' : 'customer'
-      setProfile({
-        id: userId,
-        full_name: email.split('@')[0],
-        role: role as 'customer' | 'provider' | 'admin',
-        is_active: true,
-      })
+      // Fail closed when the profile cannot be verified.
+      setProfile(null)
     }
   }
 
   if (booting) return <Spinner />
+
+  if (!isSupabaseConfigured) return (
+    <div style={{ minHeight:'100vh', display:'flex', alignItems:'center', justifyContent:'center', padding:24, background:'var(--bg)' }}>
+      <div className="glass" style={{ maxWidth:520, padding:28 }} role="alert">
+        <p style={{ fontSize:32, marginBottom:12 }}>⚙️</p>
+        <h1 style={{ fontSize:20, marginBottom:8 }}>Supabase configuration required</h1>
+        <p style={{ color:'var(--text2)', lineHeight:1.6, fontSize:14 }}>
+          Add <code>VITE_SUPABASE_URL</code> and <code>VITE_SUPABASE_ANON_KEY</code> to your local environment or deployment settings, then restart the app.
+        </p>
+      </div>
+    </div>
+  )
 
   return (
     <Routes>
