@@ -91,3 +91,25 @@ select.input{cursor:pointer}textarea.input{resize:vertical;min-height:80px}
   .mobile-nav-spacer{height:78px !important}
   .page-content{padding-bottom:92px !important}
 }
+
+/* Admin dashboard responsive layout */
+.admin-home,.admin-home .page-content{width:100%;min-width:0;max-width:100%;overflow-x:hidden}
+.admin-stat-grid>*,.admin-alert-grid>*,.admin-chart-grid>*{min-width:0}
+.admin-chart-card{min-width:0;overflow:hidden}
+.admin-table-scroll{width:100%;max-width:100%;overflow-x:auto;overflow-y:hidden;-webkit-overflow-scrolling:touch}
+.admin-table-scroll .data-table{min-width:760px}
+.admin-table-hint{display:none;color:var(--text3);font-size:11px;text-align:right;padding:8px 14px 10px}
+@media (max-width:1024px){
+  .admin-stat-grid{grid-template-columns:repeat(2,minmax(0,1fr)) !important}
+  .admin-alert-grid{grid-template-columns:repeat(3,minmax(0,1fr)) !important}
+  .admin-chart-grid{grid-template-columns:minmax(0,1fr) !important}
+}
+@media (max-width:767px){
+  .admin-home .page-content{padding:14px 14px 92px !important}
+  .admin-stat-grid,.admin-alert-grid{grid-template-columns:minmax(0,1fr) !important;gap:12px !important}
+  .admin-chart-grid{gap:14px !important}
+  .admin-chart-card{padding:14px !important}
+  .admin-chart-card .badge{max-width:58vw;overflow:hidden;text-overflow:ellipsis}
+  .admin-table-hint{display:block}
+  .admin-home .data-table th,.admin-home .data-table td{padding:12px 14px}
+}
