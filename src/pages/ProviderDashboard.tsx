@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { Routes, Route }    from 'react-router-dom'
 import Sidebar               from '@/components/layout/Sidebar'
 import ProviderHome          from '@/components/provider/ProviderHome'
@@ -7,6 +8,7 @@ import ProviderKyc           from '@/components/provider/ProviderKyc'
 import ProviderProfile       from '@/components/provider/ProviderProfile'
 import ProviderReviews       from '@/components/provider/ProviderReviews'
 import { ProviderMobileNav } from '@/components/layout/MobileNav'
+import ProviderMobileMenu from '@/components/layout/ProviderMobileMenu'
 
 const NAV = [
   { icon:'🏠', label:'Dashboard',    path:'/provider',         section:'Main'    },
@@ -19,6 +21,8 @@ const NAV = [
 ]
 
 export default function ProviderDashboard() {
+  const [menuOpen, setMenuOpen] = useState(false)
+
   return (
     <div style={{ display:'flex', width:'100%', minHeight:'100vh', background:'var(--bg)' }}>
       <Sidebar items={NAV} basePath="/provider" />
@@ -37,6 +41,7 @@ export default function ProviderDashboard() {
         </Routes>
       </main>
       <ProviderMobileNav />
+      <ProviderMobileMenu open={menuOpen} onClose={() => setMenuOpen(value => !value)} />
     </div>
   )
 }
