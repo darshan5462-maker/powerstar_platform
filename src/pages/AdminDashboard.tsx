@@ -30,9 +30,9 @@ export default function AdminDashboard() {
   const [menuOpen, setMenuOpen] = useState(false)
 
   return (
-    <div style={{ display:'flex', minHeight:'100vh' }}>
+    <div className="admin-shell" style={{ display:'flex', width:'100%', minWidth:0, minHeight:'100vh' }}>
       <Sidebar items={NAV} basePath="/admin" />
-      <main style={{ flex:1, minWidth:0, background:'var(--bg)', minHeight:'100vh' }}>
+      <main className="admin-main" style={{ flex:1, width:'100%', minWidth:0, background:'var(--bg)', minHeight:'100vh' }}>
         <Routes>
           <Route index            element={<AdminHome />} />
           <Route path="bookings"  element={<AdminBookings />} />
