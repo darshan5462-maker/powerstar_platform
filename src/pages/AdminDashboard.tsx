@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { Routes, Route } from 'react-router-dom'
 import Sidebar from '@/components/layout/Sidebar'
 import AdminHome      from '@/components/admin/AdminHome'
@@ -10,6 +11,7 @@ import AdminSettings  from '@/components/admin/AdminSettings'
 import AdminCustomers from '@/components/admin/AdminCustomers'
 import AdminPayments  from '@/components/admin/AdminPayments'
 import AdminPricing   from '@/components/admin/AdminPricing'
+import AdminMobileMenu, { AdminMobileNav } from '@/components/layout/AdminMobileNav'
 
 const NAV = [
   { icon:'📊', label:'Dashboard',    path:'/admin',              section:'Analytics' },
@@ -25,6 +27,8 @@ const NAV = [
 ]
 
 export default function AdminDashboard() {
+  const [menuOpen, setMenuOpen] = useState(false)
+
   return (
     <div style={{ display:'flex', minHeight:'100vh' }}>
       <Sidebar items={NAV} basePath="/admin" />
@@ -43,6 +47,8 @@ export default function AdminDashboard() {
           <Route path="*"         element={<AdminHome />} />
         </Routes>
       </main>
+      <AdminMobileNav />
+      <AdminMobileMenu open={menuOpen} onClose={() => setMenuOpen(value => !value)} />
     </div>
   )
 }
