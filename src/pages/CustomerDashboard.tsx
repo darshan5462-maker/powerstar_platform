@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { Routes, Route }    from 'react-router-dom'
 import Sidebar               from '@/components/layout/Sidebar'
 import CustomerHome          from '@/components/customer/CustomerHome'
@@ -6,6 +7,7 @@ import CustomerBookings      from '@/components/customer/CustomerBookings'
 import CustomerTrack         from '@/components/customer/CustomerTrack'
 import CustomerProfile       from '@/components/customer/CustomerProfile'
 import { CustomerMobileNav } from '@/components/layout/MobileNav'
+import CustomerMobileMenu from '@/components/layout/CustomerMobileMenu'
 
 const NAV = [
   { icon:'🏠', label:'Dashboard',     path:'/dashboard',          section:'Main'    },
@@ -16,6 +18,8 @@ const NAV = [
 ]
 
 export default function CustomerDashboard() {
+  const [menuOpen, setMenuOpen] = useState(false)
+
   return (
     <div style={{ display:'flex', width:'100%', minHeight:'100vh', background:'var(--bg)' }}>
       <Sidebar items={NAV} basePath="/dashboard" />
@@ -30,6 +34,7 @@ export default function CustomerDashboard() {
         </Routes>
       </main>
       <CustomerMobileNav />
+      <CustomerMobileMenu open={menuOpen} onClose={() => setMenuOpen(value => !value)} />
     </div>
   )
 }
