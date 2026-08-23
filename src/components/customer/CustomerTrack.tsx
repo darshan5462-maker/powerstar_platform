@@ -32,6 +32,8 @@ export default function CustomerTrack() {
   const [provCoords,    setProvCoords]    = useState<Coords|null>(null)
   const [custCoords,    setCustCoords]    = useState<Coords|null>(null)
   const [locGranted,    setLocGranted]    = useState(false)
+  const [locError,      setLocError]      = useState<string | null>(null)
+  const [shareError,    setShareError]    = useState<string | null>(null)
   const [eta,           setEta]           = useState<number|null>(null)
   const [distKm,        setDistKm]        = useState<number|null>(null)
 
@@ -58,24 +60,41 @@ export default function CustomerTrack() {
 
   useEffect(() => { load() }, [load])
 
-  // Get customer location
-  useEffect(() => {
-    if (!navigator.geolocation) return
+  const requestLocation = useCallback(() => {
+    if (!navigator.geolocation) {
+      setLocError('This browser does not support location access.')
+      setLocGranted(false)
+      return
+    }
+    setLocError(null)
     navigator.geolocation.getCurrentPosition(
       pos => {
-        setCustCoords({ lat: pos.coords.latitude, lng: pos.coords.longitude })
+        const coords = { lat: pos.coords.latitude, lng: pos.coords.longitude }
+        setCustCoords(coords)
         setLocGranted(true)
+        setLocError(null)
       },
-      () => setLocGranted(false),
-      { enableHighAccuracy: true }
+      error => {
+        setLocGranted(false)
+        setLocError(error.code === 1 ? 'Location permission was denied. Enable Location for this site in browser settings, then tap Allow again.' : 'Location could not be detected. Check your phone GPS and try again.')
+      },
+      { enableHighAccuracy: true, maximumAge: 10000, timeout: 15000 }
     )
+  }, [])
+
+  // Ask once on entry; the visible Allow button calls the same action again
+  // after a user changes browser permission settings.
+  useEffect(() => { requestLocation() }, [requestLocation])
+
+  useEffect(() => {
+    if (!locGranted || !navigator.geolocation) return
     const watch = navigator.geolocation.watchPosition(
       pos => setCustCoords({ lat: pos.coords.latitude, lng: pos.coords.longitude }),
-      () => {},
-      { enableHighAccuracy: true, maximumAge: 10000 }
+      () => setLocError('Live location updates stopped. Tap Allow to retry.'),
+      { enableHighAccuracy: true, maximumAge: 10000, timeout: 15000 }
     )
     return () => navigator.geolocation.clearWatch(watch)
-  }, [])
+  }, [locGranted])
 
   // Subscribe to provider location
   useEffect(() => {
@@ -93,7 +112,7 @@ export default function CustomerTrack() {
         filter:`provider_id=eq.${bk.provider_id}` },
         (payload: any) => {
           const { latitude: lat, longitude: lng } = payload.new ?? {}
-          if (lat && lng) setProvCoords({ lat, lng })
+          if (Number.isFinite(lat) && Number.isFinite(lng)) setProvCoords({ lat, lng })
         }
       ).subscribe()
     return () => { supabase.removeChannel(ch) }
@@ -107,7 +126,7 @@ export default function CustomerTrack() {
     setEta(Math.max(1, Math.round(d * 3))) // ~20km/h average city speed
   }, [provCoords, custCoords])
 
-  // Save customer location to DB for provider navigation
+  // Save customer location to DB for provider navigation.
   useEffect(() => {
     const bk = bookings.find(b => b.id === selected)
     if (!bk?.id || !custCoords || !profile?.id) return
@@ -117,7 +136,10 @@ export default function CustomerTrack() {
       latitude:    custCoords.lat,
       longitude:   custCoords.lng,
       updated_at:  new Date().toISOString(),
-    }, { onConflict: 'booking_id' }).then(() => {})
+    }, { onConflict: 'booking_id' }).then(({ error }) => {
+      if (error) setShareError('Location permission is on, but sharing is unavailable. Apply the customer_locations migration, then retry.')
+      else setShareError(null)
+    })
   }, [custCoords, selected, bookings, profile?.id])
 
   // Realtime booking status
@@ -235,11 +257,16 @@ export default function CustomerTrack() {
             <p style={{fontSize:12,color:'var(--text2)',marginTop:1}}>Allow location access in your browser settings</p>
           </div>
           <button className="btn btn-sm" style={{background:'rgba(217,119,6,0.15)',color:'#d97706',border:'1px solid rgba(217,119,6,0.3)',flexShrink:0}}
-            onClick={()=>navigator.geolocation?.getCurrentPosition(p=>{setCustCoords({lat:p.coords.latitude,lng:p.coords.longitude});setLocGranted(true)},()=>toast.error('Location denied — please allow in browser settings'))}>
+            onClick={requestLocation}>
             Allow
           </button>
-        </div>
-      )}
+          </div>
+        )}
+        {(locError || shareError) && (
+          <div role="alert" style={{ background:'rgba(220,38,38,0.06)', borderBottom:'1px solid rgba(220,38,38,0.18)', padding:'9px 16px', color:'#b91c1c', fontSize:12, lineHeight:1.45 }}>
+            {locError || shareError}
+          </div>
+        )}
 
       {/* Bottom sheet */}
       <div style={{flex:1,background:'var(--card)',borderTopLeftRadius:22,borderTopRightRadius:22,marginTop:-10,position:'relative',zIndex:10,boxShadow:'0 -4px 24px rgba(0,0,0,0.1)'}}>
