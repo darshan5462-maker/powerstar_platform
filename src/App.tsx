@@ -29,6 +29,8 @@ export default function App() {
     supabase.auth.getSession().then(async ({ data: { session } }) => {
       if (session?.user) {
         await resolveProfile(session.user.id, session.user.email ?? '')
+      } else {
+        setProfile(null)
       }
       setLoading(false)
       setBooting(false)
@@ -43,6 +45,8 @@ export default function App() {
       }
       if (session?.user) {
         await resolveProfile(session.user.id, session.user.email ?? '')
+      } else {
+        setProfile(null)
       }
       setLoading(false)
       setBooting(false)
