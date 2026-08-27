@@ -65,14 +65,24 @@ export default function App() {
 
       if (error) throw error
 
-      // Never infer or create a role on the client. The database trigger/policy
-      // is the source of truth for identity and authorization.
-      if (!data || data.is_active === false) {
+      // Never infer or create a role on the client. If an older deployment
+      // missed the auth trigger, ask the database-owned repair RPC to provision
+      // the profile using the server-side user metadata and safe role mapping.
+      let resolved = data
+      if (!resolved) {
+        const repaired = await supabase.rpc('ensure_my_profile')
+        if (repaired.error || !repaired.data) {
+          setProfile(null)
+          return
+        }
+        resolved = repaired.data
+      }
+      if (resolved.is_active === false) {
         setProfile(null)
         return
       }
 
-      setProfile(data)
+      setProfile(resolved)
     } catch {
       // Fail closed when the profile cannot be verified.
       setProfile(null)
