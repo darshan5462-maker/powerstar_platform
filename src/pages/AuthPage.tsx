@@ -43,10 +43,14 @@ export default function AuthPage() {
       if (error) throw error
       if (!data.user) throw new Error('Login failed')
 
-      const { data: profile, error: profileError } = await supabase
+      let { data: profile, error: profileError } = await supabase
         .from('profiles').select('*').eq('id', data.user.id).maybeSingle()
       if (profileError) throw profileError
-      if (!profile) throw new Error('Your account profile is not available. Please contact support.')
+      if (!profile) {
+        const repaired = await supabase.rpc('ensure_my_profile')
+        if (repaired.error || !repaired.data) throw new Error('Your account profile could not be created. Apply the auth profile migration, then try again.')
+        profile = repaired.data
+      }
       if (profile.is_active === false) throw new Error('This account is inactive. Please contact support.')
 
       setProfile(profile)
@@ -86,10 +90,14 @@ export default function AuthPage() {
         return
       }
 
-      const { data: profile, error: profileError } = await supabase
+      let { data: profile, error: profileError } = await supabase
         .from('profiles').select('*').eq('id', data.user.id).maybeSingle()
       if (profileError) throw profileError
-      if (!profile) throw new Error('Account created, but the profile is still being provisioned. Please sign in again.')
+      if (!profile) {
+        const repaired = await supabase.rpc('ensure_my_profile')
+        if (repaired.error || !repaired.data) throw new Error('Account created, but the profile could not be provisioned. Apply the auth profile migration, then sign in again.')
+        profile = repaired.data
+      }
 
       setProfile(profile)
       toast.success('Account created! Welcome to POWERSTAR')
