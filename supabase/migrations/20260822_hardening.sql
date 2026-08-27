@@ -215,3 +215,80 @@ WHERE p.kyc_status = 'verified' AND p.is_online = true AND pr.is_active = true;
 
 GRANT SELECT ON public_provider_directory TO anon, authenticated;
 DROP POLICY IF EXISTS public_verified ON providers;
+
+
+-- ── Auth profile repair ─────────────────────────────────────────
+-- Repairs deployments where auth.users was created but the profile trigger
+-- was missing or failed. Metadata can create only customer/provider roles;
+-- administrator access must still be granted manually by a protected admin.
+CREATE OR REPLACE FUNCTION public.handle_new_user()
+RETURNS TRIGGER
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public, auth AS $$
+BEGIN
+  INSERT INTO public.profiles (id, full_name, role, phone, district)
+  VALUES (
+    NEW.id,
+    COALESCE(NULLIF(NEW.raw_user_meta_data->>'full_name',''), NULLIF(split_part(COALESCE(NEW.email,''),'@',1),''), 'User'),
+    CASE WHEN NEW.raw_user_meta_data->>'role' = 'provider' THEN 'provider'::public.user_role ELSE 'customer'::public.user_role END,
+    NEW.raw_user_meta_data->>'phone',
+    NEW.raw_user_meta_data->>'district'
+  )
+  ON CONFLICT (id) DO NOTHING;
+  RETURN NEW;
+END;
+$$;
+
+DROP TRIGGER IF EXISTS on_auth_user_created ON auth.users;
+CREATE TRIGGER on_auth_user_created
+  AFTER INSERT ON auth.users
+  FOR EACH ROW EXECUTE FUNCTION public.handle_new_user();
+
+-- Backfill users stranded by an absent trigger. This never creates admins.
+INSERT INTO public.profiles (id, full_name, role, phone, district)
+SELECT
+  u.id,
+  COALESCE(NULLIF(u.raw_user_meta_data->>'full_name',''), NULLIF(split_part(COALESCE(u.email,''),'@',1),''), 'User'),
+  CASE WHEN u.raw_user_meta_data->>'role' = 'provider' THEN 'provider'::public.user_role ELSE 'customer'::public.user_role END,
+  u.raw_user_meta_data->>'phone',
+  u.raw_user_meta_data->>'district'
+FROM auth.users u
+WHERE NOT EXISTS (SELECT 1 FROM public.profiles p WHERE p.id = u.id)
+ON CONFLICT (id) DO NOTHING;
+
+CREATE OR REPLACE FUNCTION public.ensure_my_profile()
+RETURNS public.profiles
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public, auth AS $$
+DECLARE
+  current_user auth.users%ROWTYPE;
+  ensured_profile public.profiles;
+BEGIN
+  IF auth.uid() IS NULL THEN
+    RAISE EXCEPTION 'Authentication is required';
+  END IF;
+
+  SELECT * INTO current_user FROM auth.users WHERE id = auth.uid();
+  IF current_user.id IS NULL THEN
+    RAISE EXCEPTION 'Authenticated user record was not found';
+  END IF;
+
+  INSERT INTO public.profiles (id, full_name, role, phone, district)
+  VALUES (
+    current_user.id,
+    COALESCE(NULLIF(current_user.raw_user_meta_data->>'full_name',''), NULLIF(split_part(COALESCE(current_user.email,''),'@',1),''), 'User'),
+    CASE WHEN current_user.raw_user_meta_data->>'role' = 'provider' THEN 'provider'::public.user_role ELSE 'customer'::public.user_role END,
+    current_user.raw_user_meta_data->>'phone',
+    current_user.raw_user_meta_data->>'district'
+  )
+  ON CONFLICT (id) DO NOTHING;
+
+  SELECT * INTO ensured_profile FROM public.profiles WHERE id = auth.uid();
+  RETURN ensured_profile;
+END;
+$$;
+
+REVOKE ALL ON FUNCTION public.ensure_my_profile() FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION public.ensure_my_profile() TO authenticated;
