@@ -2,7 +2,7 @@
 
 html,body{overflow-x:hidden;width:100%;margin:0;padding:0}
 :root{--brand:#f97316;--brand-dark:#ea580c;--brand-light:rgba(249,115,22,0.08);--bg:#f8fafc;--bg2:#f1f5f9;--card:#ffffff;--border:#e2e8f0;--text:#0f172a;--text2:#475569;--text3:#94a3b8;--shadow:0 1px 3px rgba(0,0,0,0.08),0 4px 16px rgba(0,0,0,0.04);--shadow-md:0 4px 24px rgba(0,0,0,0.1);--radius:14px}
-[data-theme="dark"]{--bg:#0f172a;--bg2:#1e293b;--card:#1e293b;--border:#334155;--text:#f1f5f9;--text2:#94a3b8;--text3:#475569;--shadow:0 1px 3px rgba(0,0,0,0.3),0 4px 16px rgba(0,0,0,0.2);--shadow-md:0 4px 24px rgba(0,0,0,0.4)}
+html.dark{--bg:#0f172a;--bg2:#1e293b;--card:#1e293b;--border:#334155;--text:#f1f5f9;--text2:#94a3b8;--text3:#64748b;--shadow:0 1px 3px rgba(0,0,0,0.3),0 4px 16px rgba(0,0,0,0.2);--shadow-md:0 4px 24px rgba(0,0,0,0.4);color-scheme:dark}
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
 body{font-family:'Inter',-apple-system,BlinkMacSystemFont,sans-serif;font-size:14px;line-height:1.5;color:var(--text);background:var(--bg);-webkit-font-smoothing:antialiased}
 #root{display:flex;min-height:100vh;width:100%}
@@ -113,3 +113,32 @@ select.input{cursor:pointer}textarea.input{resize:vertical;min-height:80px}
   .admin-table-hint{display:block}
   .admin-home .data-table th,.admin-home .data-table td{padding:12px 14px}
 }
+
+/* Admin desktop centering and mobile record cards */
+.admin-main{display:flex;flex-direction:column;align-items:stretch}
+.admin-home{flex:1}
+.admin-home>.page-content{width:100%;max-width:1280px;margin:0 auto}
+.admin-mobile-booking-list{display:none}
+.admin-mobile-booking-card{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:14px;box-shadow:var(--shadow)}
+.admin-mobile-booking-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+.admin-mobile-booking-grid>div{min-width:0}
+.admin-mobile-booking-grid span{display:block;font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:.35px;margin-bottom:4px}
+.admin-mobile-booking-grid strong{display:block;min-width:0;font-size:12px;font-weight:600;overflow-wrap:anywhere}
+@media (min-width:768px){
+  .admin-home>.page-content{padding-left:24px;padding-right:24px}
+}
+@media (max-width:767px){
+  .admin-home>.page-content{width:100%;max-width:none;margin:0;padding-left:14px !important;padding-right:14px !important}
+  .admin-chart-card{width:100%;max-width:100%;min-height:0}
+  .admin-chart-card .recharts-wrapper,.admin-chart-card .recharts-surface{max-width:100%}
+  .admin-table-scroll{display:none}
+  .admin-mobile-booking-list{display:flex;flex-direction:column;gap:10px}
+  .admin-mobile-booking-card{width:100%;max-width:100%}
+}
+
+/* Site-wide dark mode surfaces */
+html.dark body,html.dark #root{background:var(--bg);color:var(--text)}
+html.dark input,html.dark select,html.dark textarea{color-scheme:dark}
+html.dark .input::placeholder{color:var(--text3)}
+html.dark .data-table tr:hover td{background:var(--bg2)}
+html.dark button:focus-visible,html.dark a:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-visible{outline:3px solid rgba(249,115,22,.35);outline-offset:2px}
