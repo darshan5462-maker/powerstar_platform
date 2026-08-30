@@ -85,38 +85,64 @@ export default function ProviderJobs({ myJobs = false }: { myJobs?: boolean }) {
             </p>
           </div>
         ) : myJobs ? (
-          <div className="glass" style={{ overflow:'hidden' }}>
-            <table className="data-table">
-              <thead>
-                <tr><th>Booking ID</th><th>Customer</th><th>Service</th><th>Date</th><th>Earned</th><th>Status</th><th>Action</th></tr>
-              </thead>
-              <tbody>
-                {data.map((j: any) => (
-                  <tr key={j.id}>
-                    <td><span style={{ fontFamily:'monospace', fontSize:11, color:'var(--text2)' }}>{j.booking_ref}</span></td>
-                    <td>
-                      <div style={{ display:'flex', alignItems:'center', gap:8 }}>
-                        <Avatar name={j.customer?.full_name ?? 'C'} size={26} />
-                        <span style={{ fontWeight:500 }}>{j.customer?.full_name ?? '—'}</span>
+          <div className="glass provider-jobs-history" style={{ overflow:'hidden', minWidth:0 }}>
+            <div className="provider-desktop-table">
+              <table className="data-table">
+                <thead>
+                  <tr><th>Booking ID</th><th>Customer</th><th>Service</th><th>Date</th><th>Earned</th><th>Status</th><th>Action</th></tr>
+                </thead>
+                <tbody>
+                  {data.map((j: any) => (
+                    <tr key={j.id}>
+                      <td><span style={{ fontFamily:'monospace', fontSize:11, color:'var(--text2)' }}>{j.booking_ref}</span></td>
+                      <td>
+                        <div style={{ display:'flex', alignItems:'center', gap:8 }}>
+                          <Avatar name={j.customer?.full_name ?? 'C'} size={26} />
+                          <span style={{ fontWeight:500 }}>{j.customer?.full_name ?? '—'}</span>
+                        </div>
+                      </td>
+                      <td><span style={{ marginRight:5 }}>{j.category?.icon}</span>{j.category?.name}</td>
+                      <td style={{ color:'var(--text2)', fontSize:12 }}>
+                        {new Date(j.created_at).toLocaleDateString('en-IN', { day:'numeric', month:'short' })}
+                      </td>
+                      <td style={{ fontWeight:700, color:'var(--brand)' }}>
+                        ₹{Math.round((j.total_amount||0)*0.9).toLocaleString('en-IN')}
+                      </td>
+                      <td><StatusBadge status={j.status} /></td>
+                      <td>
+                        {j.status === 'accepted' && (
+                          <button className="btn btn-success btn-sm" onClick={() => complete(j.id)}>Mark Complete</button>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <div className="provider-mobile-job-list">
+              {data.map((j: any) => (
+                <article className="provider-mobile-job-card" key={j.id}>
+                  <div className="provider-mobile-job-heading">
+                    <div className="provider-mobile-job-customer">
+                      <Avatar name={j.customer?.full_name ?? 'C'} size={34} />
+                      <div>
+                        <p className="provider-mobile-job-name">{j.customer?.full_name ?? '—'}</p>
+                        <p className="provider-mobile-job-ref">{j.booking_ref}</p>
                       </div>
-                    </td>
-                    <td><span style={{ marginRight:5 }}>{j.category?.icon}</span>{j.category?.name}</td>
-                    <td style={{ color:'var(--text2)', fontSize:12 }}>
-                      {new Date(j.created_at).toLocaleDateString('en-IN', { day:'numeric', month:'short' })}
-                    </td>
-                    <td style={{ fontWeight:700, color:'var(--brand)' }}>
-                      ₹{Math.round((j.total_amount||0)*0.9).toLocaleString('en-IN')}
-                    </td>
-                    <td><StatusBadge status={j.status} /></td>
-                    <td>
-                      {j.status === 'accepted' && (
-                        <button className="btn btn-success btn-sm" onClick={() => complete(j.id)}>Mark Complete</button>
-                      )}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+                    </div>
+                    <StatusBadge status={j.status} />
+                  </div>
+                  <div className="provider-mobile-job-meta">
+                    <span><strong>Service</strong>{j.category?.icon ?? '🔧'} {j.category?.name ?? 'Service'}</span>
+                    <span><strong>Date</strong>{new Date(j.created_at).toLocaleDateString('en-IN', { day:'numeric', month:'short', year:'numeric' })}</span>
+                  </div>
+                  <div className="provider-mobile-job-footer">
+                    <span className="provider-mobile-job-amount">₹{Math.round((j.total_amount||0)*0.9).toLocaleString('en-IN')} earned</span>
+                    {j.status === 'accepted' && <button className="btn btn-success btn-sm" onClick={() => complete(j.id)}>Mark Complete</button>}
+                  </div>
+                </article>
+              ))}
+            </div>
           </div>
         ) : (
           <div style={{ display:'flex', flexDirection:'column', gap:14, maxWidth:660 }}>
