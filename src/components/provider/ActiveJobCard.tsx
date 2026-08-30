@@ -109,9 +109,9 @@ export default function ActiveJobCard({ job, myCoords, onStartJob, onCompleteJob
           center: [center.lat, center.lng], zoom: 14,
           zoomControl: false, attributionControl: true,
         })
-        L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
           maxZoom: 19,
-          attribution: '&copy; OpenStreetMap &copy; CARTO',
+          attribution: '&copy; OpenStreetMap contributors',
         }).addTo(map)
         L.control.zoom({ position: 'bottomright' }).addTo(map)
         leafletRef.current = map
