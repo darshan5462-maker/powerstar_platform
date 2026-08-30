@@ -32,7 +32,7 @@ export default function ProviderEarnings() {
     <div>
       <PageHeader title="Earnings" subtitle="Your income overview and payment history" />
       <div className="page-content">
-        <div style={{ display:'grid', gridTemplateColumns:'repeat(4,1fr)', gap:14, marginBottom:22 }}>
+        <div className="provider-earnings-stats" style={{ display:'grid', gridTemplateColumns:'repeat(4,1fr)', gap:14, marginBottom:22, minWidth:0 }}>
           <StatCard icon="💰" iconBg="rgba(249,115,22,0.1)" label="Today"        value={todayNet>0?'₹'+Math.round(todayNet).toLocaleString('en-IN'):'₹0'} />
           <StatCard icon="📅" iconBg="rgba(22,163,74,0.1)"  label="This Month"   value={monthNet>0?'₹'+Math.round(monthNet).toLocaleString('en-IN'):'₹0'} />
           <StatCard icon="🏆" iconBg="rgba(37,99,235,0.1)"  label="Total Earned" value={totalNet>0?'₹'+Math.round(totalNet).toLocaleString('en-IN'):'₹0'} />
@@ -40,7 +40,7 @@ export default function ProviderEarnings() {
         </div>
 
         {/* Chart */}
-        <div className="glass" style={{ padding:22, marginBottom:20 }}>
+        <div className="glass provider-earnings-chart" style={{ padding:22, marginBottom:20, minWidth:0, overflow:'hidden' }}>
           <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:16 }}>
             <h3 style={{ fontWeight:700, fontSize:14 }}>Weekly Earnings</h3>
             <span className="badge badge-gray" style={{ fontSize:11 }}>Demo data — live chart coming soon</span>
@@ -60,8 +60,8 @@ export default function ProviderEarnings() {
         </div>
 
         {/* Payment history */}
-        <div className="glass" style={{ overflow:'hidden' }}>
-          <div style={{ padding:'14px 20px', borderBottom:'1px solid var(--border)', display:'flex', justifyContent:'space-between', alignItems:'center' }}>
+        <div className="glass provider-payment-history" style={{ overflow:'hidden', minWidth:0 }}>
+          <div className="provider-payment-heading" style={{ padding:'14px 20px', borderBottom:'1px solid var(--border)', display:'flex', justifyContent:'space-between', alignItems:'center', gap:12 }}>
             <h3 style={{ fontWeight:700, fontSize:14 }}>Payment History</h3>
             <span style={{ fontSize:12, color:'var(--text3)' }}>You receive 90% of booking amount</span>
           </div>
@@ -74,25 +74,47 @@ export default function ProviderEarnings() {
               <p style={{ fontSize:12, marginTop:6 }}>Accept job requests to start earning.</p>
             </div>
           ) : (
-            <table className="data-table">
-              <thead>
-                <tr><th>Date</th><th>Customer</th><th>Service</th><th>Booking Amount</th><th>You Receive (90%)</th><th>Status</th></tr>
-              </thead>
-              <tbody>
+            <>
+              <div className="provider-desktop-table">
+                <table className="data-table">
+                  <thead>
+                    <tr><th>Date</th><th>Customer</th><th>Service</th><th>Booking Amount</th><th>You Receive (90%)</th><th>Status</th></tr>
+                  </thead>
+                  <tbody>
+                    {completed.map((j: any) => (
+                      <tr key={j.id}>
+                        <td style={{ color:'var(--text2)', fontSize:12 }}>
+                          {new Date(j.created_at).toLocaleDateString('en-IN', { day:'numeric', month:'short', year:'2-digit' })}
+                        </td>
+                        <td style={{ fontWeight:500 }}>{j.customer?.full_name ?? '—'}</td>
+                        <td><span style={{ marginRight:5 }}>{j.category?.icon}</span>{j.category?.name}</td>
+                        <td style={{ color:'var(--text2)' }}>₹{(j.total_amount||0).toLocaleString('en-IN')}</td>
+                        <td style={{ fontWeight:700, color:'var(--brand)' }}>₹{Math.round((j.total_amount||0)*0.9).toLocaleString('en-IN')}</td>
+                        <td><span className="badge badge-green">Settled</span></td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              <div className="provider-mobile-payment-list">
                 {completed.map((j: any) => (
-                  <tr key={j.id}>
-                    <td style={{ color:'var(--text2)', fontSize:12 }}>
-                      {new Date(j.created_at).toLocaleDateString('en-IN', { day:'numeric', month:'short', year:'2-digit' })}
-                    </td>
-                    <td style={{ fontWeight:500 }}>{j.customer?.full_name ?? '—'}</td>
-                    <td><span style={{ marginRight:5 }}>{j.category?.icon}</span>{j.category?.name}</td>
-                    <td style={{ color:'var(--text2)' }}>₹{(j.total_amount||0).toLocaleString('en-IN')}</td>
-                    <td style={{ fontWeight:700, color:'var(--brand)' }}>₹{Math.round((j.total_amount||0)*0.9).toLocaleString('en-IN')}</td>
-                    <td><span className="badge badge-green">Settled</span></td>
-                  </tr>
+                  <article className="provider-mobile-payment-card" key={j.id}>
+                    <div className="provider-mobile-payment-top">
+                      <div>
+                        <p className="provider-mobile-job-name">{j.customer?.full_name ?? '—'}</p>
+                        <p className="provider-mobile-job-ref">{new Date(j.created_at).toLocaleDateString('en-IN', { day:'numeric', month:'short', year:'numeric' })}</p>
+                      </div>
+                      <span className="badge badge-green">Settled</span>
+                    </div>
+                    <div className="provider-mobile-payment-grid">
+                      <span><strong>Service</strong>{j.category?.icon ?? '🔧'} {j.category?.name ?? 'Service'}</span>
+                      <span><strong>Booking amount</strong>₹{(j.total_amount||0).toLocaleString('en-IN')}</span>
+                      <span><strong>You receive</strong><b>₹{Math.round((j.total_amount||0)*0.9).toLocaleString('en-IN')}</b></span>
+                    </div>
+                  </article>
                 ))}
-              </tbody>
-            </table>
+              </div>
+            </>
           )}
         </div>
       </div>
