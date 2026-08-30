@@ -268,8 +268,8 @@ export default function ActiveJobCard({ job, myCoords, onStartJob, onCompleteJob
       )}
 
       {/* Job details grid */}
-      <div style={{ padding:'16px 20px' }}>
-        <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:12, marginBottom:16 }}>
+      <div className="provider-job-details" style={{ padding:'16px 20px', minWidth:0 }}>
+        <div className="provider-job-details-grid" style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:12, marginBottom:16, minWidth:0 }}>
 
           {/* Customer */}
           <div style={{ background:'var(--bg2)', borderRadius:12, padding:'12px 14px' }}>
@@ -318,8 +318,7 @@ export default function ActiveJobCard({ job, myCoords, onStartJob, onCompleteJob
         )}
 
         {/* Action buttons */}
-        <div style={{ display:'flex', gap:10 }}>
-          <a href={`tel:${job.customer?.phone}`} className="btn btn-outline" style={{ flex:1, textDecoration:'none', display:'flex', alignItems:'center', justifyContent:'center', gap:6 }}>
+        <div className="provider-job-actions" style={{ display:'flex', gap:10, flexWrap:'wrap', minWidth:0 }}>       <a href={`tel:${job.customer?.phone}`} className="btn btn-outline" style={{ flex:1, textDecoration:'none', display:'flex', alignItems:'center', justifyContent:'center', gap:6 }}>
             📞 Call Customer
           </a>
 
