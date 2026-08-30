@@ -253,16 +253,16 @@ export default function ProviderHome() {
         )}
 
         {/* Stats */}
-        <div style={{ display:'grid', gridTemplateColumns:'repeat(4,1fr)', gap:14, marginBottom:22 }}>
+        <div className="provider-stats-grid" style={{ display:'grid', gridTemplateColumns:'repeat(4,1fr)', gap:14, marginBottom:22, minWidth:0 }}>
           <StatCard icon="💰" iconBg="rgba(249,115,22,0.1)" label="Total Earned" value={earned>0?'₹'+Math.round(earned).toLocaleString('en-IN'):'₹0'} />
           <StatCard icon="📋" iconBg="rgba(22,163,74,0.1)"  label="Total Jobs"   value={String(myJobs.length)} change={todayJobs.length+' today'} up={todayJobs.length>0} />
           <StatCard icon="📩" iconBg="rgba(37,99,235,0.1)"  label="Requests"     value={String(requests.length)} change={online?'Live':'Go online'} up={online} />
           <StatCard icon="🔐" iconBg="rgba(217,119,6,0.1)"  label="KYC"          value={kycStatus==='loading'?'...':kycStatus.charAt(0).toUpperCase()+kycStatus.slice(1)} />
         </div>
 
-        <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:18 }}>
+        <div className="provider-dashboard-grid" style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:18, minWidth:0 }}>
           {/* Job Requests */}
-          <div className="glass" style={{ padding:20 }}>
+          <div className="glass provider-dashboard-panel" style={{ padding:20, minWidth:0 }}>
             <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:14 }}>
               <div style={{ display:'flex', alignItems:'center', gap:8 }}>
                 <h3 style={{ fontWeight:700, fontSize:14 }}>Job Requests</h3>
@@ -312,7 +312,7 @@ export default function ProviderHome() {
           </div>
 
           {/* Recent Jobs */}
-          <div className="glass" style={{ padding:20 }}>
+          <div className="glass provider-dashboard-panel" style={{ padding:20, minWidth:0 }}>
             <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:14 }}>
               <h3 style={{ fontWeight:700, fontSize:14 }}>Recent Jobs</h3>
               <button className="btn btn-ghost btn-sm" onClick={()=>nav('/provider/myjobs')}>View all →</button>
