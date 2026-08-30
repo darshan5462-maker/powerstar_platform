@@ -142,3 +142,18 @@ html.dark input,html.dark select,html.dark textarea{color-scheme:dark}
 html.dark .input::placeholder{color:var(--text3)}
 html.dark .data-table tr:hover td{background:var(--bg2)}
 html.dark button:focus-visible,html.dark a:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-visible{outline:3px solid rgba(249,115,22,.35);outline-offset:2px}
+
+/* Provider dashboard responsive layout */
+.provider-stats-grid,.provider-dashboard-grid{min-width:0}
+.provider-dashboard-panel{min-width:0;overflow:hidden}
+.provider-job-details-grid{min-width:0}
+.provider-job-actions{min-width:0}
+@media (max-width:767px){
+  .provider-stats-grid{grid-template-columns:minmax(0,1fr) !important;gap:12px !important}
+  .provider-dashboard-grid{grid-template-columns:minmax(0,1fr) !important;gap:14px !important}
+  .provider-dashboard-panel{width:100%;padding:16px !important}
+  .provider-job-details{padding:14px !important}
+  .provider-job-details-grid{grid-template-columns:minmax(0,1fr) !important;gap:10px !important}
+  .provider-job-actions{display:grid !important;grid-template-columns:minmax(0,1fr) !important;gap:8px !important}
+  .provider-job-actions .btn,.provider-job-actions a{width:100%;min-width:0 !important;flex:unset !important}
+}
