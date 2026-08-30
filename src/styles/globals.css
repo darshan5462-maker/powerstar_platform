@@ -157,3 +157,45 @@ html.dark button:focus-visible,html.dark a:focus-visible,input:focus-visible,sel
   .provider-job-actions{display:grid !important;grid-template-columns:minmax(0,1fr) !important;gap:8px !important}
   .provider-job-actions .btn,.provider-job-actions a{width:100%;min-width:0 !important;flex:unset !important}
 }
+
+/* Complete provider portal mobile layout */
+.provider-desktop-table{width:100%;overflow-x:auto;-webkit-overflow-scrolling:touch}
+.provider-mobile-job-list,.provider-mobile-payment-list{display:none}
+.provider-mobile-job-card,.provider-mobile-payment-card{background:var(--bg2);border:1px solid var(--border);border-radius:14px;padding:14px;min-width:0}
+.provider-mobile-job-heading,.provider-mobile-payment-top{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;min-width:0}
+.provider-mobile-job-customer{display:flex;align-items:center;gap:10px;min-width:0}
+.provider-mobile-job-customer>div:last-child,.provider-mobile-payment-top>div{min-width:0}
+.provider-mobile-job-name{font-size:13px;font-weight:700;overflow-wrap:anywhere}
+.provider-mobile-job-ref{font-size:11px;color:var(--text3);margin-top:3px;font-family:monospace;overflow-wrap:anywhere}
+.provider-mobile-job-meta{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;margin-top:14px;padding-top:12px;border-top:1px solid var(--border);font-size:12px;color:var(--text2)}
+.provider-mobile-job-meta span,.provider-mobile-payment-grid span{display:flex;flex-direction:column;gap:4px;min-width:0;overflow-wrap:anywhere}
+.provider-mobile-job-meta strong,.provider-mobile-payment-grid strong{font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:.35px}
+.provider-mobile-job-footer{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-top:14px;padding-top:12px;border-top:1px solid var(--border);min-width:0}
+.provider-mobile-job-amount{font-size:13px;font-weight:800;color:var(--brand);overflow-wrap:anywhere}
+.provider-mobile-job-footer .btn{flex-shrink:0}
+.provider-mobile-payment-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;margin-top:14px;padding-top:12px;border-top:1px solid var(--border);font-size:12px;color:var(--text2)}
+.provider-mobile-payment-grid b{font-size:14px;color:var(--brand)}
+.provider-payment-heading span{max-width:50%;text-align:right;overflow-wrap:anywhere}
+@media (max-width:767px){
+  .page-header-shell{padding:12px 14px !important;align-items:flex-start !important}
+  .page-header-main{min-width:0;flex:1}
+  .page-header-title,.page-header-subtitle{white-space:normal !important;overflow:visible !important;text-overflow:clip !important}
+  .page-header-action{margin-left:0 !important;max-width:42%;min-width:0}
+  .page-header-action .btn{max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .provider-earnings-stats{grid-template-columns:minmax(0,1fr) !important;gap:12px !important}
+  .provider-earnings-chart{padding:14px !important}
+  .provider-earnings-chart .recharts-responsive-container{max-width:100% !important}
+  .provider-payment-heading{padding:14px !important;align-items:flex-start !important;flex-wrap:wrap}
+  .provider-payment-heading span{max-width:100%;text-align:left}
+  .provider-desktop-table{display:none}
+  .provider-mobile-job-list,.provider-mobile-payment-list{display:flex;flex-direction:column;gap:10px;padding:12px}
+  .provider-mobile-job-card,.provider-mobile-payment-card{width:100%;max-width:100%}
+  .provider-mobile-job-meta,.provider-mobile-payment-grid{grid-template-columns:minmax(0,1fr)}
+  .provider-mobile-job-footer{align-items:stretch;flex-direction:column}
+  .provider-mobile-job-footer .btn{width:100%}
+}
+
+@media (max-width:767px){
+  .provider-kyc-upload-grid{grid-template-columns:minmax(0,1fr) !important;gap:12px !important}
+  .provider-kyc-upload-grid label{padding:16px !important}
+}
