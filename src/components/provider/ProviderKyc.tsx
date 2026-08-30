@@ -127,7 +127,7 @@ export default function ProviderKyc() {
         )}
 
         {/* Upload grid */}
-        <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:14, marginBottom:20 }}>
+        <div className="provider-kyc-upload-grid" style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:14, marginBottom:20, minWidth:0 }}>
           {DOCS.map(doc => (
             <label
               key={doc.type}
