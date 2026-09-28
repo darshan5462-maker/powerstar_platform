@@ -1,5 +1,6 @@
 import { Routes, Route, useNavigate } from 'react-router-dom'
 import Sidebar from '@/components/layout/Sidebar'
+import { ProviderMobileNav } from '@/components/layout/MobileNav'
 import ProviderHome     from '@/components/provider/ProviderHome'
 import ProviderJobs     from '@/components/provider/ProviderJobs'
 import ProviderEarnings from '@/components/provider/ProviderEarnings'
@@ -31,6 +32,7 @@ export default function ProviderDashboard() {
           <Route path="*"         element={<ProviderHome />} />
         </Routes>
       </main>
+      <ProviderMobileNav />
     </div>
   )
 }

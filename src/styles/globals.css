@@ -278,7 +278,8 @@ textarea.input { resize: vertical; min-height: 80px }
 
 /* ── RESPONSIVE ── */
 @media (max-width: 768px) {
-  .page-content { padding: 14px 14px }
+  .desktop-sidebar { display: none !important; }
+  .page-content { padding: 14px 14px; padding-bottom: 80px; }
   .data-table th, .data-table td { padding: 10px 12px }
 }
 @media (max-width: 480px) {

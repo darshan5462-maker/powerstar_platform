@@ -71,6 +71,17 @@ export function ProviderMobileNav() {
   return <MobileNavBar tabs={tabs} />
 }
 
+export function AdminMobileNav() {
+  const tabs: NavTab[] = [
+    { icon:'🏠', label:'Home',      path:'/admin' },
+    { icon:'📋', label:'Bookings',  path:'/admin/bookings' },
+    { icon:'👷', label:'Providers', path:'/admin/providers' },
+    { icon:'📄', label:'KYC',       path:'/admin/kyc' },
+    { icon:'⚙️', label:'Settings',  path:'/admin/settings' },
+  ]
+  return <MobileNavBar tabs={tabs} />
+}
+
 function MobileNavBar({ tabs }: { tabs: NavTab[] }) {
   const nav      = useNavigate()
   const location = useLocation()

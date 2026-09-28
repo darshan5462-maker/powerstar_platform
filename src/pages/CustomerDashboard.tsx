@@ -1,5 +1,6 @@
 import { Routes, Route, useNavigate, useLocation } from 'react-router-dom'
 import Sidebar from '@/components/layout/Sidebar'
+import { CustomerMobileNav } from '@/components/layout/MobileNav'
 import { useAuthStore } from '@/store/authStore'
 
 // Inline sub-pages for brevity – each is a self-contained component
@@ -35,6 +36,7 @@ export default function CustomerDashboard() {
           <Route path="*"     element={<CustomerHome />} />
         </Routes>
       </main>
+      <CustomerMobileNav />
     </div>
   )
 }

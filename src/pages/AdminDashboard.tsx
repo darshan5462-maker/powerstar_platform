@@ -1,5 +1,6 @@
 import { Routes, Route, useNavigate } from 'react-router-dom'
 import Sidebar from '@/components/layout/Sidebar'
+import { AdminMobileNav } from '@/components/layout/MobileNav'
 import AdminHome      from '@/components/admin/AdminHome'
 import AdminBookings  from '@/components/admin/AdminBookings'
 import AdminProviders from '@/components/admin/AdminProviders'
@@ -37,6 +38,7 @@ export default function AdminDashboard() {
           <Route path="*"         element={<AdminHome />} />
         </Routes>
       </main>
+      <AdminMobileNav />
     </div>
   )
 }

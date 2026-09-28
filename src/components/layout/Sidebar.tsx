@@ -46,7 +46,7 @@ export default function Sidebar({ items, basePath }: { items: NavItem[]; basePat
       position: 'sticky', top: 0, height: '100vh',
       transition: 'width 0.22s cubic-bezier(.4,0,.2,1)',
       overflow: 'hidden', zIndex: 40,
-    }}>
+    }} className="desktop-sidebar">
 
       {/* ── LOGO ── */}
       <div style={{ padding: '0 12px', height: 60, display: 'flex', alignItems: 'center', justifyContent: collapsed ? 'center' : 'space-between', borderBottom: '1px solid var(--border)', flexShrink: 0 }}>
