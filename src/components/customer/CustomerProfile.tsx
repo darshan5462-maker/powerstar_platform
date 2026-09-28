@@ -29,6 +29,8 @@ export default function CustomerProfile() {
       toast.success('Profile updated!')
     } catch { toast.error('Update failed') }
     finally { setSaving(false) }
+  }
+
   async function logout() {
     await supabase.auth.signOut()
     reset()
