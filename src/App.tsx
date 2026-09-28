@@ -40,6 +40,7 @@ function Root() {
 }
 
 export default function App() {
+  useAuth() // Initialize auth listener globally
   return (
     <Routes>
       <Route path="/"    element={<Root />} />
