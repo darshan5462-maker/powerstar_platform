@@ -93,7 +93,7 @@ export default function CustomerHome() {
       <div style={{ padding:'0 16px', marginTop:-8 }}>
 
         {/* Stats strip */}
-        <div className="grid-to-scroll" style={{ gridTemplateColumns:'repeat(3,1fr)', marginBottom:20 }}>
+        <div style={{ display:'grid', gridTemplateColumns:'repeat(3,1fr)', gap:10, marginBottom:20 }}>
           {[
             { icon:'📋', val: bookings.length || 0, label:'Bookings', color:'#f97316' },
             { icon:'✅', val: completed.length || 0, label:'Completed', color:'#16a34a' },

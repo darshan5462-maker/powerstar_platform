@@ -8,7 +8,8 @@ import { DISTRICTS, getCities } from '@/data/karnataka'
 import toast from 'react-hot-toast'
 
 export default function ProviderProfile() {
-  const { profile, setProfile } = useAuthStore()
+  const nav = useNavigate()
+  const { profile, setProfile, reset } = useAuthStore()
   const [saving,      setSaving]      = useState(false)
   const [categories,  setCategories]  = useState<any[]>([])
   const [myServices,  setMyServices]  = useState<any[]>([])
@@ -101,6 +102,13 @@ export default function ProviderProfile() {
       toast.success('Profile saved!')
     } catch (err: any) { toast.error(err?.message || 'Save failed') }
     finally { setSaving(false) }
+  }
+
+  async function logout() {
+    await supabase.auth.signOut()
+    reset()
+    nav('/')
+    toast.success('Logged out successfully')
   }
 
   const usedCatIds = new Set(myServices.map(s => s.category_id))
@@ -209,6 +217,13 @@ export default function ProviderProfile() {
             {available.length === 0 && myServices.length > 0 && (
               <p style={{ fontSize:12, color:'var(--text3)', textAlign:'center', marginTop:8 }}>All available services have been added.</p>
             )}
+          </div>
+
+          {/* Logout */}
+          <div style={{ marginTop:24, marginBottom:40 }}>
+            <button className="btn btn-danger" style={{ width:'100%', padding:'14px', fontSize:15, background:'transparent', color:'#ef4444', border:'1.5px solid #ef4444', boxShadow:'none' }} onClick={logout}>
+              🚪 Logout
+            </button>
           </div>
 
         </div>

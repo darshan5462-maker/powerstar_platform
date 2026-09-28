@@ -1,8 +1,13 @@
 import { useState } from 'react'
 import PageHeader from '@/components/layout/PageHeader'
+import { supabase } from '@/lib/supabase'
+import { useAuthStore } from '@/store/authStore'
+import { useNavigate } from 'react-router-dom'
 import toast from 'react-hot-toast'
 
 export default function AdminSettings() {
+  const nav = useNavigate()
+  const { reset } = useAuthStore()
   const [s, setS] = useState({
     platform_name:'POWERSTAR', support_phone:'+91 80 4567 8900',
     support_email:'support@powerstar.in', platform_fee:'5',
@@ -11,6 +16,13 @@ export default function AdminSettings() {
     razorpay_key:'rzp_live_xxxxxxxxxx', min_booking:'100',
   })
   const set = (k:string)=>(e:React.ChangeEvent<HTMLInputElement|HTMLSelectElement>)=>setS(v=>({...v,[k]:e.target.value}))
+
+  async function logout() {
+    await supabase.auth.signOut()
+    reset()
+    nav('/')
+    toast.success('Logged out successfully')
+  }
 
   return (
     <div>
@@ -63,9 +75,14 @@ export default function AdminSettings() {
           </div>
         </div>
 
-        <button className="btn btn-brand" style={{width:'100%'}} onClick={()=>toast.success('Settings saved successfully!')}>
-          Save All Settings
-        </button>
+        <div style={{ display:'flex', gap:10 }}>
+          <button className="btn btn-brand" style={{flex:2}} onClick={()=>toast.success('Settings saved successfully!')}>
+            Save All Settings
+          </button>
+          <button className="btn btn-danger" style={{flex:1,background:'transparent',color:'#ef4444',border:'1.5px solid #ef4444',boxShadow:'none'}} onClick={logout}>
+            🚪 Logout
+          </button>
+        </div>
       </div>
     </div>
   )

@@ -4,10 +4,13 @@ import { updateProfile } from '@/services/authService'
 import PageHeader from '@/components/layout/PageHeader'
 import Avatar from '@/components/ui/Avatar'
 import { DISTRICTS } from '@/data/karnataka'
+import { supabase } from '@/lib/supabase'
+import { useNavigate } from 'react-router-dom'
 import toast from 'react-hot-toast'
 
 export default function CustomerProfile() {
-  const { profile, setProfile } = useAuthStore()
+  const nav = useNavigate()
+  const { profile, setProfile, reset } = useAuthStore()
   const [saving, setSaving] = useState(false)
   const [form, setForm] = useState({
     full_name: profile?.full_name || '',
@@ -26,6 +29,11 @@ export default function CustomerProfile() {
       toast.success('Profile updated!')
     } catch { toast.error('Update failed') }
     finally { setSaving(false) }
+  async function logout() {
+    await supabase.auth.signOut()
+    reset()
+    nav('/')
+    toast.success('Logged out successfully')
   }
 
   return (
@@ -55,7 +63,10 @@ export default function CustomerProfile() {
             <label className="input-label">Email</label>
             <input className="input" value={profile?.id?'customer@demo.com':''} disabled style={{opacity:0.6}} />
           </div>
-          <button className="btn btn-brand" onClick={save} disabled={saving}>{saving?'Saving…':'Save Changes'}</button>
+          <div style={{ display:'flex', gap:10 }}>
+            <button className="btn btn-brand" style={{flex:2}} onClick={save} disabled={saving}>{saving?'Saving…':'Save Changes'}</button>
+            <button className="btn btn-danger" style={{flex:1,background:'transparent',color:'#ef4444',border:'1.5px solid #ef4444',boxShadow:'none'}} onClick={logout}>🚪 Logout</button>
+          </div>
         </div>
       </div>
     </div>
