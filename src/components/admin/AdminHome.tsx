@@ -36,7 +36,7 @@ export default function AdminHome() {
       <div className="page-content">
 
         {/* Primary stats */}
-        <div style={{display:'grid',gridTemplateColumns:'repeat(4,1fr)',gap:16,marginBottom:24}}>
+        <div className="grid-to-scroll" style={{ gridTemplateColumns:'repeat(4,1fr)', marginBottom:24 }}>
           <StatCard icon="📋" iconBg="rgba(249,115,22,0.1)" label="Total Bookings"    value="1,284"  change="127 today" up onClick={()=>nav('/admin/bookings')} />
           <StatCard icon="💰" iconBg="rgba(22,163,74,0.1)"  label="Revenue (MTD)"     value="₹9.2L"  change="22% vs last month" up onClick={()=>nav('/admin/payments')} />
           <StatCard icon="👷" iconBg="rgba(37,99,235,0.1)"  label="Active Providers"  value="4,218"  change="847 online now" up onClick={()=>nav('/admin/providers')} />
@@ -44,7 +44,7 @@ export default function AdminHome() {
         </div>
 
         {/* Charts row */}
-        <div style={{display:'grid',gridTemplateColumns:'2fr 1fr',gap:20,marginBottom:20}}>
+        <div className="responsive-grid" style={{ marginBottom:20 }}>
           <div className="glass" style={{padding:22}}>
             <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:20}}>
               <h3 style={{fontWeight:700,fontSize:15}}>Monthly Revenue</h3>
@@ -86,7 +86,7 @@ export default function AdminHome() {
         </div>
 
         {/* Secondary stats */}
-        <div style={{display:'grid',gridTemplateColumns:'repeat(4,1fr)',gap:16,marginBottom:20}}>
+        <div className="grid-to-scroll" style={{ gridTemplateColumns:'repeat(4,1fr)', marginBottom:20 }}>
           <div className="glass" style={{padding:16,cursor:'pointer'}} onClick={()=>nav('/admin/disputes')}>
             <div style={{display:'flex',gap:12,alignItems:'center'}}>
               <div style={{fontSize:24}}>⚠️</div>

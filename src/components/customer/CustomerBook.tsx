@@ -99,10 +99,10 @@ export default function CustomerBook() {
                   <button className={`tab-item ${svcType==='manpower'?'active':''}`} onClick={()=>{setSvcType('manpower');setSvcIdx(0)}}>👷 Manpower</button>
                   <button className={`tab-item ${svcType==='vehicle'?'active':''}`}  onClick={()=>{setSvcType('vehicle');setSvcIdx(0)}}>🚛 Vehicles</button>
                 </div>
-                <div style={{ display:'grid', gridTemplateColumns:'repeat(4,1fr)', gap:8, marginBottom:20 }}>
+                <div className="h-scroll" style={{ marginBottom:20 }}>
                   {allSvcs.slice(0,8).map((s,i)=>(
-                    <div key={i} onClick={()=>setSvcIdx(i)}
-                      style={{ padding:'12px 6px', border:`2px solid ${svcIdx===i?'var(--brand)':'var(--border)'}`, borderRadius:10, textAlign:'center', cursor:'pointer', background:svcIdx===i?'var(--brand-light)':'transparent', transition:'all 0.15s' }}>
+                    <div key={i} className="h-scroll-item" onClick={()=>setSvcIdx(i)}
+                      style={{ width:100, padding:'12px 6px', border:`2px solid ${svcIdx===i?'var(--brand)':'var(--border)'}`, borderRadius:10, textAlign:'center', cursor:'pointer', background:svcIdx===i?'var(--brand-light)':'transparent', transition:'all 0.15s' }}>
                       <div style={{ fontSize:22, marginBottom:5 }}>{s.icon}</div>
                       <div style={{ fontSize:11, fontWeight:600, color:svcIdx===i?'var(--brand)':'var(--text)', lineHeight:1.2 }}>{s.name}</div>
                       {s.basePrice>0 && <div style={{ fontSize:10, color:'var(--text3)', marginTop:2 }}>₹{s.basePrice}{s.unit}</div>}
@@ -113,9 +113,9 @@ export default function CustomerBook() {
                 {svcType==='manpower' && (
                   <div style={{ background:'var(--bg2)', borderRadius:12, padding:14, marginBottom:16 }}>
                     <p style={{ fontWeight:600, fontSize:13, marginBottom:10 }}>How many hours?</p>
-                    <div style={{ display:'flex', gap:8, flexWrap:'wrap' }}>
+                    <div className="h-scroll">
                       {[1,2,3,4,6,8].map(h=>(
-                        <button key={h} onClick={()=>setHours(h)}
+                        <button key={h} className="h-scroll-item" onClick={()=>setHours(h)}
                           style={{ padding:'8px 16px', borderRadius:8, border:`2px solid ${hours===h?'var(--brand)':'var(--border)'}`, background:hours===h?'var(--brand-light)':'transparent', cursor:'pointer', fontWeight:600, fontSize:13, color:hours===h?'var(--brand)':'var(--text)', transition:'all 0.15s' }}>
                           {h}h
                         </button>

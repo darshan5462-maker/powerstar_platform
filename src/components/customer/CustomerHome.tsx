@@ -93,7 +93,7 @@ export default function CustomerHome() {
       <div style={{ padding:'0 16px', marginTop:-8 }}>
 
         {/* Stats strip */}
-        <div style={{ display:'grid', gridTemplateColumns:'repeat(3,1fr)', gap:10, marginBottom:20 }}>
+        <div className="grid-to-scroll" style={{ gridTemplateColumns:'repeat(3,1fr)', marginBottom:20 }}>
           {[
             { icon:'📋', val: bookings.length || 0, label:'Bookings', color:'#f97316' },
             { icon:'✅', val: completed.length || 0, label:'Completed', color:'#16a34a' },
@@ -127,12 +127,12 @@ export default function CustomerHome() {
           </div>
         )}
 
-        {/* Promo banner */}
-        <div style={{ borderRadius:16, overflow:'hidden', marginBottom:22, position:'relative', height:110 }}>
+        {/* Promo banner (Horizontal Swipe) */}
+        <div className="h-scroll" style={{ marginBottom:22 }}>
           {BANNERS.map((b, i) => (
-            <div key={i} style={{
-              position:'absolute', inset:0, background:b.bg, padding:20, display:'flex', alignItems:'center', gap:16,
-              opacity: i === banner ? 1 : 0, transition:'opacity 0.5s ease',
+            <div key={i} className="h-scroll-item" style={{
+              width: '85vw', maxWidth: 340, height: 110, background: b.bg, borderRadius: 16,
+              padding: 20, display: 'flex', alignItems: 'center', gap: 16,
             }}>
               <span style={{ fontSize:36, flexShrink:0 }}>{b.icon}</span>
               <div style={{ flex:1 }}>
@@ -142,13 +142,6 @@ export default function CustomerHome() {
               </div>
             </div>
           ))}
-          {/* Dots */}
-          <div style={{ position:'absolute', bottom:8, left:'50%', transform:'translateX(-50%)', display:'flex', gap:5, zIndex:2 }}>
-            {BANNERS.map((_,i) => (
-              <div key={i} onClick={() => setBanner(i)}
-                style={{ width: i===banner?20:6, height:6, borderRadius:3, background:'rgba(255,255,255,0.8)', cursor:'pointer', transition:'width 0.3s' }} />
-            ))}
-          </div>
         </div>
 
         {/* Quick services */}
@@ -157,10 +150,10 @@ export default function CustomerHome() {
             <h2 style={{ fontWeight:800, fontSize:16, fontFamily:'Plus Jakarta Sans,sans-serif' }}>Book a Service</h2>
             <button className="btn btn-ghost btn-sm" onClick={() => nav('/dashboard/book')} style={{ fontSize:12 }}>See all →</button>
           </div>
-          <div style={{ display:'grid', gridTemplateColumns:'repeat(4,1fr)', gap:10 }}>
+          <div className="h-scroll">
             {QUICK_SERVICES.map((s, i) => (
-              <div key={i} onClick={() => nav('/dashboard/book')}
-                style={{ background:'var(--card)', borderRadius:14, padding:'14px 8px', textAlign:'center', cursor:'pointer', border:'1px solid var(--border)', transition:'all 0.2s', boxShadow:'0 1px 4px rgba(0,0,0,0.04)' }}
+              <div key={i} className="h-scroll-item" onClick={() => nav('/dashboard/book')}
+                style={{ width:84, background:'var(--card)', borderRadius:14, padding:'14px 8px', textAlign:'center', cursor:'pointer', border:'1px solid var(--border)', transition:'all 0.2s', boxShadow:'0 1px 4px rgba(0,0,0,0.04)' }}
                 onMouseEnter={e => { const el=e.currentTarget as HTMLElement; el.style.transform='translateY(-2px)'; el.style.boxShadow='0 4px 12px rgba(0,0,0,0.1)' }}
                 onMouseLeave={e => { const el=e.currentTarget as HTMLElement; el.style.transform=''; el.style.boxShadow='0 1px 4px rgba(0,0,0,0.04)' }}>
                 <div style={{ width:40, height:40, borderRadius:12, background:s.bg, display:'flex', alignItems:'center', justifyContent:'center', fontSize:20, margin:'0 auto 8px' }}>

@@ -37,7 +37,7 @@ export function CustomerMobileNav() {
     { icon:'➕', label:'Book',     path:'/dashboard/book' },
     { icon:'📍', label:'Track',    path:'/dashboard/track',    badge: activeBookings > 0 ? activeBookings : undefined },
     { icon:'📋', label:'Bookings', path:'/dashboard/bookings' },
-    { icon:'👤', label:'Profile',  path:'/dashboard/profile',  badge: notifications > 0 ? notifications : undefined },
+    { icon:'☰', label:'Menu',     path:'/dashboard/profile',  badge: notifications > 0 ? notifications : undefined },
   ]
 
   return <MobileNavBar tabs={tabs} />
@@ -65,7 +65,7 @@ export function ProviderMobileNav() {
     { icon:'📩', label:'Requests', path:'/provider/myjobs',  badge: requests > 0 ? requests : undefined },
     { icon:'💰', label:'Earnings', path:'/provider/earnings' },
     { icon:'⭐', label:'Reviews',  path:'/provider/reviews' },
-    { icon:'👤', label:'Profile',  path:'/provider/profile', badge: notifications > 0 ? notifications : undefined },
+    { icon:'☰', label:'Menu',     path:'/provider/profile', badge: notifications > 0 ? notifications : undefined },
   ]
 
   return <MobileNavBar tabs={tabs} />
@@ -77,7 +77,7 @@ export function AdminMobileNav() {
     { icon:'📋', label:'Bookings',  path:'/admin/bookings' },
     { icon:'👷', label:'Providers', path:'/admin/providers' },
     { icon:'📄', label:'KYC',       path:'/admin/kyc' },
-    { icon:'⚙️', label:'Settings',  path:'/admin/settings' },
+    { icon:'☰', label:'Menu',      path:'/admin/settings' },
   ]
   return <MobileNavBar tabs={tabs} />
 }

@@ -260,6 +260,27 @@ textarea.input { resize: vertical; min-height: 80px }
   background-size: 36px 36px;
 }
 
+/* ── HORIZONTAL SCROLL (SWIPE) ── */
+.h-scroll {
+  display: flex; gap: 12px; overflow-x: auto; padding-bottom: 8px;
+  scroll-snap-type: x mandatory; -ms-overflow-style: none; scrollbar-width: none;
+}
+.h-scroll::-webkit-scrollbar { display: none; }
+.h-scroll-item { scroll-snap-align: start; flex-shrink: 0; }
+
+/* ── RESPONSIVE GRID TO SCROLL ── */
+.grid-to-scroll { display: grid; gap: 16px; }
+.responsive-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
+@media (max-width: 768px) {
+  .grid-to-scroll {
+    display: flex; overflow-x: auto; scroll-snap-type: x mandatory; padding-bottom: 8px;
+    -ms-overflow-style: none; scrollbar-width: none; gap: 12px;
+  }
+  .grid-to-scroll::-webkit-scrollbar { display: none; }
+  .grid-to-scroll > * { scroll-snap-align: start; flex-shrink: 0; width: 65vw; min-width: 150px; }
+  .responsive-grid { grid-template-columns: 1fr; }
+}
+
 /* ── KEYFRAMES ── */
 @keyframes liveRing {
   0%   { box-shadow: 0 0 0 0 rgba(22,163,74,0.6) }
