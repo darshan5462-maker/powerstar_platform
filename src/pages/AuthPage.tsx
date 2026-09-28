@@ -97,7 +97,7 @@ export default function AuthPage() {
         </div>
 
         <div style={{position:'relative',zIndex:1}}>
-          <div style={{display:'flex',gap:16'}}>
+          <div style={{display:'flex',gap:16}}>
             {[['4,200+','Providers'],['31','Districts'],['4.8★','Rating']].map(([v,l],i)=>(
               <div key={i} style={{textAlign:'center'}}>
                 <div style={{fontSize:22,fontWeight:800,color:'#f97316',fontFamily:'Plus Jakarta Sans,sans-serif'}}>{v}</div>
