@@ -75,12 +75,32 @@ export default function AdminSettings() {
           </div>
         </div>
 
-        <div style={{ display:'flex', gap:10 }}>
+        <div style={{ display:'flex', gap:10, marginBottom:20 }}>
           <button className="btn btn-brand" style={{flex:2}} onClick={()=>toast.success('Settings saved successfully!')}>
             Save All Settings
           </button>
-          <button className="btn btn-danger" style={{flex:1,background:'transparent',color:'#ef4444',border:'1.5px solid #ef4444',boxShadow:'none'}} onClick={logout}>
-            🚪 Logout
+        </div>
+
+        {/* ── MOBILE MENU LINKS ── */}
+        <div className="glass" style={{ display:'flex', flexDirection:'column', marginBottom: 40 }}>
+          {[
+            { icon:'👥', label:'Customers',   path:'/admin/customers' },
+            { icon:'💳', label:'Payments',    path:'/admin/payments' },
+            { icon:'⚠️', label:'Disputes',    path:'/admin/disputes' },
+            { icon:'🏷️', label:'Services',    path:'/admin/services' },
+            { icon:'💰', label:'Pricing',     path:'/admin/pricing' },
+          ].map(link => (
+            <button key={link.label} onClick={() => nav(link.path)}
+              style={{ display:'flex', alignItems:'center', gap:14, padding:'18px 20px', borderBottom:'1px solid var(--border)', background:'transparent', borderTop:'none', borderLeft:'none', borderRight:'none', cursor:'pointer', textAlign:'left', color:'var(--text)' }}>
+              <span style={{ fontSize:20, width:24, textAlign:'center' }}>{link.icon}</span>
+              <span style={{ fontSize:15, fontWeight:600, flex:1 }}>{link.label}</span>
+              <span style={{ color:'var(--text3)' }}>›</span>
+            </button>
+          ))}
+          <button onClick={logout}
+            style={{ display:'flex', alignItems:'center', gap:14, padding:'18px 20px', background:'transparent', border:'none', cursor:'pointer', textAlign:'left', color:'#ef4444' }}>
+            <span style={{ fontSize:20, width:24, textAlign:'center' }}>🚪</span>
+            <span style={{ fontSize:15, fontWeight:700, flex:1 }}>Logout</span>
           </button>
         </div>
       </div>

@@ -219,10 +219,26 @@ export default function ProviderProfile() {
             )}
           </div>
 
-          {/* Logout */}
-          <div style={{ marginTop:24, marginBottom:40 }}>
-            <button className="btn btn-danger" style={{ width:'100%', padding:'14px', fontSize:15, background:'transparent', color:'#ef4444', border:'1.5px solid #ef4444', boxShadow:'none' }} onClick={logout}>
-              🚪 Logout
+          {/* ── MOBILE MENU LINKS ── */}
+          <div className="glass" style={{ display:'flex', flexDirection:'column', marginTop: 16, marginBottom: 40 }}>
+            {[
+              { icon:'📩', label:'My Jobs',        path:'/provider/myjobs' },
+              { icon:'💰', label:'Earnings',       path:'/provider/earnings' },
+              { icon:'⭐', label:'Reviews',        path:'/provider/reviews' },
+              { icon:'🔔', label:'Notifications',  path:'/provider/notifications' },
+              { icon:'📞', label:'Help & Support', path:'/provider/support' },
+            ].map(link => (
+              <button key={link.label} onClick={() => nav(link.path)}
+                style={{ display:'flex', alignItems:'center', gap:14, padding:'18px 20px', borderBottom:'1px solid var(--border)', background:'transparent', borderTop:'none', borderLeft:'none', borderRight:'none', cursor:'pointer', textAlign:'left', color:'var(--text)' }}>
+                <span style={{ fontSize:20, width:24, textAlign:'center' }}>{link.icon}</span>
+                <span style={{ fontSize:15, fontWeight:600, flex:1 }}>{link.label}</span>
+                <span style={{ color:'var(--text3)' }}>›</span>
+              </button>
+            ))}
+            <button onClick={logout}
+              style={{ display:'flex', alignItems:'center', gap:14, padding:'18px 20px', background:'transparent', border:'none', cursor:'pointer', textAlign:'left', color:'#ef4444' }}>
+              <span style={{ fontSize:20, width:24, textAlign:'center' }}>🚪</span>
+              <span style={{ fontSize:15, fontWeight:700, flex:1 }}>Logout</span>
             </button>
           </div>
 

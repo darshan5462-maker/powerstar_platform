@@ -193,7 +193,7 @@ textarea.input { resize: vertical; min-height: 80px }
 
 /* ── SIDEBAR LAYOUT ── */
 .app-layout { display: flex; min-height: 100vh }
-.app-main { flex: 1; min-width: 0; background: var(--bg); display: flex; flex-direction: column }
+.main-layout { flex: 1; min-width: 0; background: var(--bg); display: flex; flex-direction: column }
 
 /* ── PAGE STRUCTURE ── */
 .page-content { padding: 20px 24px; flex: 1 }
