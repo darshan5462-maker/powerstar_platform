@@ -1,5 +1,11 @@
 const STATUS: Record<string,{label:string;cls:string}> = {
   pending:   { label:'Pending',   cls:'badge badge-yellow' },
+  pending_admin: { label:'Pending Admin', cls:'badge badge-yellow' },
+  provider_assigned: { label:'Assigned', cls:'badge badge-blue' },
+  payment_pending: { label:'Payment Pending', cls:'badge badge-orange' },
+  payment_success: { label:'Paid', cls:'badge badge-green' },
+  confirmed: { label:'Confirmed', cls:'badge badge-green' },
+  in_progress: { label:'In Progress', cls:'badge badge-blue' },
   accepted:  { label:'Accepted',  cls:'badge badge-blue'   },
   active:    { label:'Active',    cls:'badge badge-orange' },
   completed: { label:'Completed', cls:'badge badge-green'  },

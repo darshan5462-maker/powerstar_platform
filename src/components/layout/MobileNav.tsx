@@ -24,7 +24,7 @@ export function CustomerMobileNav() {
     if (!profile?.id) return
     // Count active bookings
     supabase.from('bookings').select('id', { count:'exact' })
-      .eq('customer_id', profile.id).in('status', ['pending','accepted','active'])
+      .eq('customer_id', profile.id).in('status', ['pending_admin','provider_assigned','payment_pending','payment_success','confirmed','in_progress'])
       .then(({ count }) => setActiveBookings(count ?? 0))
     // Count unread notifications
     supabase.from('notifications').select('id', { count:'exact' })
@@ -53,7 +53,7 @@ export function ProviderMobileNav() {
   useEffect(() => {
     if (!profile?.id || !profile?.district) return
     supabase.from('bookings').select('id', { count:'exact' })
-      .eq('status', 'pending').ilike('district', profile.district)
+      .eq('status', 'provider_assigned').eq('provider_id', profile.id)
       .then(({ count }) => setRequests(count ?? 0))
     supabase.from('notifications').select('id', { count:'exact' })
       .eq('user_id', profile.id).eq('is_read', false)

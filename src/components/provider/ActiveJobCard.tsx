@@ -173,7 +173,7 @@ export default function ActiveJobCard({ job, myCoords, onStartJob, onCompleteJob
           <div style={{ display:'flex', alignItems:'center', gap:8 }}>
             <div className="live-dot" style={{ width:9, height:9 }} />
             <span style={{ fontWeight:800, fontSize:16, color:'var(--brand)' }}>
-              {job.status==='accepted' ? 'Job Accepted — Head to Customer' : 'Job In Progress'}
+              {job.status==='confirmed' ? 'Job Confirmed — Head to Customer' : 'Job In Progress'}
             </span>
           </div>
           <StatusBadge status={job.status} />
@@ -187,7 +187,7 @@ export default function ActiveJobCard({ job, myCoords, onStartJob, onCompleteJob
           <div ref={mapRef} style={{ height:220, width:'100%' }} />
 
           {/* ETA pill over map */}
-          {distKm !== null && eta !== null && job.status === 'accepted' && (
+          {distKm !== null && eta !== null && job.status === 'confirmed' && (
             <div style={{ position:'absolute', top:12, left:'50%', transform:'translateX(-50%)', background:'rgba(0,0,0,0.8)', borderRadius:20, padding:'7px 18px', color:'#fff', fontSize:13, fontWeight:700, zIndex:999, backdropFilter:'blur(8px)', display:'flex', alignItems:'center', gap:8, whiteSpace:'nowrap' }}>
               <span style={{ color:'#f97316' }}>🛵</span>
               {distKm.toFixed(1)} km · ~{eta} min to customer
@@ -282,12 +282,12 @@ export default function ActiveJobCard({ job, myCoords, onStartJob, onCompleteJob
             🗺️ Navigate
           </button>
 
-          {job.status === 'accepted' && (
+          {job.status === 'confirmed' && (
             <button className="btn btn-brand" style={{ flex:2, fontWeight:700 }} onClick={() => onStartJob(job.id)}>
               ▶ Start Job
             </button>
           )}
-          {job.status === 'active' && (
+          {job.status === 'in_progress' && (
             <button className="btn btn-success" style={{ flex:2, fontWeight:700 }} onClick={() => onCompleteJob(job.id)}>
               ✅ Mark Complete
             </button>

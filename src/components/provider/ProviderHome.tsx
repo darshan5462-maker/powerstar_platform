@@ -50,15 +50,14 @@ export default function ProviderHome() {
     return () => navigator.geolocation.clearWatch(w)
   }, [online])
 
-  async function fetchRequests(district: string, catId: string | null) {
+  async function fetchRequests(providerId: string) {
     let q = supabase.from('bookings')
       .select(`*, category:service_categories(name,icon,slug),
         customer:profiles!bookings_customer_id_fkey(full_name,phone)`)
-      .eq('status', 'pending')
-      .ilike('district', district.trim())
+      .eq('status', 'provider_assigned')
+      .eq('provider_id', providerId)
       .order('created_at', { ascending: false })
       .limit(20)
-    if (catId) q = q.eq('category_id', catId)
     const { data, error } = await q
     if (error) console.error('Fetch requests:', error.message)
     return data ?? []
@@ -78,12 +77,12 @@ export default function ProviderHome() {
 
     const district = p.district || 'Bengaluru Urban'
     const [reqs, jobs] = await Promise.all([
-      fetchRequests(district, provRow?.category_id ?? null),
+      fetchRequests(p.id),
       getProviderBookings(p.id),
     ])
     setRequests(reqs)
     setMyJobs(jobs)
-    const active = jobs.find((j: any) => j.status === 'accepted' || j.status === 'active')
+    const active = jobs.find((j: any) => j.status === 'confirmed' || j.status === 'in_progress')
     setActiveJob(active ?? null)
     setLoading(false)
   }
@@ -101,7 +100,7 @@ export default function ProviderHome() {
           if (norm(b.district) !== norm(profileRef.current?.district)) return
           if (categoryRef.current && b.category_id !== categoryRef.current) return
           toast('📩 New job request!', { icon:'🔔', duration:6000 })
-          const reqs = await fetchRequests(profileRef.current?.district || '', categoryRef.current)
+          const reqs = await fetchRequests(profileRef.current.id)
           setRequests(reqs)
         }
       )
@@ -110,12 +109,12 @@ export default function ProviderHome() {
           const p = profileRef.current
           if (!p?.id) return
           const [reqs, jobs] = await Promise.all([
-            fetchRequests(p.district || '', categoryRef.current),
+            fetchRequests(p.id),
             getProviderBookings(p.id),
           ])
           setRequests(reqs)
           setMyJobs(jobs)
-          const active = jobs.find((j: any) => j.status==='accepted'||j.status==='active')
+          const active = jobs.find((j: any) => j.status==='confirmed'||j.status==='in_progress')
           setActiveJob(active ?? null)
         }
       )
@@ -149,14 +148,14 @@ export default function ProviderHome() {
     try {
       await acceptBooking(bookingId, profile.id)
       setRequests(prev => prev.filter(r => r.id !== bookingId))
-      toast.success('✅ Job accepted! Navigate to customer.')
+      toast.success('✅ Job accepted! Waiting for customer payment.')
       loadAll()
     } catch { toast.error('Failed — may have been taken') }
   }
 
   async function startJob(id: string) {
     const { error } = await supabase.from('bookings')
-      .update({ status: 'active', started_at: new Date().toISOString() }).eq('id', id)
+      .update({ status: 'in_progress', started_at: new Date().toISOString() }).eq('id', id)
     if (error) { toast.error('Failed to start'); return }
     toast.success('Job started! Ask customer for OTP.')
     loadAll()

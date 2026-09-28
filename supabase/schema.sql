@@ -10,8 +10,8 @@ CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 -- ── ENUMS ──────────────────────────────────────────────────────
 CREATE TYPE user_role      AS ENUM ('customer','provider','admin');
 CREATE TYPE kyc_status     AS ENUM ('pending','submitted','verified','rejected');
-CREATE TYPE booking_status AS ENUM ('pending','accepted','active','completed','cancelled');
-CREATE TYPE payment_status AS ENUM ('pending','held','released','refunded','failed');
+CREATE TYPE booking_status AS ENUM ('pending_admin','provider_assigned','payment_pending','payment_success','confirmed','in_progress','completed','cancelled','rejected','payment_failed', 'pending','accepted','active');
+CREATE TYPE payment_status AS ENUM ('pending','success','failed','cancelled','held','released','refunded');
 CREATE TYPE service_type   AS ENUM ('manpower','vehicle','rto','financial');
 
 -- ── 1. PROFILES ────────────────────────────────────────────────
@@ -158,7 +158,7 @@ CREATE TABLE bookings (
   customer_id     UUID NOT NULL REFERENCES profiles(id),
   provider_id     UUID REFERENCES providers(id),
   category_id     UUID NOT NULL REFERENCES service_categories(id),
-  status          booking_status NOT NULL DEFAULT 'pending',
+  status          booking_status NOT NULL DEFAULT 'pending_admin',
   address         TEXT NOT NULL,
   city            TEXT NOT NULL,
   district        TEXT NOT NULL,

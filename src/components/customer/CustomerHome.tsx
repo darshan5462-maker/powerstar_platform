@@ -48,7 +48,7 @@ export default function CustomerHome() {
     return () => clearInterval(t)
   }, [])
 
-  const active    = bookings.filter(b => ['pending','accepted','active'].includes(b.status))
+  const active    = bookings.filter(b => ['pending_admin','provider_assigned','payment_pending','payment_success','confirmed','in_progress'].includes(b.status))
   const completed = bookings.filter(b => b.status === 'completed')
   const totalSpent = completed.reduce((s,b) => s + (b.total_amount||0), 0)
 
@@ -198,7 +198,7 @@ export default function CustomerHome() {
             <div style={{ display:'flex', flexDirection:'column', gap:10 }}>
               {bookings.map((b:any) => (
                 <div key={b.id}
-                  onClick={() => ['pending','accepted','active'].includes(b.status) ? nav('/dashboard/track') : nav('/dashboard/bookings')}
+                  onClick={() => ['pending_admin','provider_assigned','payment_pending','payment_success','confirmed','in_progress'].includes(b.status) ? nav('/dashboard/track') : nav('/dashboard/bookings')}
                   style={{ background:'var(--card)', borderRadius:14, padding:16, border:'1px solid var(--border)', display:'flex', alignItems:'center', gap:14, cursor:'pointer', transition:'all 0.15s' }}
                   onMouseEnter={e => (e.currentTarget as HTMLElement).style.borderColor='rgba(249,115,22,0.3)'}
                   onMouseLeave={e => (e.currentTarget as HTMLElement).style.borderColor='var(--border)'}>
