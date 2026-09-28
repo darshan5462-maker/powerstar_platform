@@ -132,7 +132,7 @@ export default function AuthPage() {
           {mode==='login' && (
             <div style={{marginBottom:20}}>
               <p style={{fontSize:11,fontWeight:700,color:'var(--text3)',textTransform:'uppercase',letterSpacing:'0.5px',marginBottom:8}}>Quick demo access</p>
-              <div style={{display:'flex',gap:8'}}>
+              <div style={{display:'flex',gap:8}}>
                 {DEMO.map(d => (
                   <button key={d.role} onClick={()=>fillDemo(d)}
                     style={{flex:1,padding:'8px 6px',borderRadius:10,border:'1.5px solid var(--border)',background:'var(--bg2)',cursor:'pointer',transition:'all 0.15s',fontFamily:'Inter,sans-serif'}}
