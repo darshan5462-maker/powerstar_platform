@@ -39,7 +39,7 @@ export default function AdminHome() {
       setLoading(false)
     }
     fetchData()
-    const interval = setInterval(fetchData, 3000)
+    const interval = setInterval(fetchData, 30000)
     const handleStorage = (e: StorageEvent) => {
       if (e.key === 'ps_bookings_sync_v2') fetchData()
     }

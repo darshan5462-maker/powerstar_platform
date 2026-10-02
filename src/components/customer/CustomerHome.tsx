@@ -48,7 +48,7 @@ export default function CustomerHome() {
       setLoading(false)
     }
     fetchActive()
-    const interval = setInterval(fetchActive, 3000)
+    const interval = setInterval(fetchActive, 30000)
     const handleStorage = (e: StorageEvent) => {
       if (e.key === 'ps_bookings_sync_v2') fetchActive()
     }

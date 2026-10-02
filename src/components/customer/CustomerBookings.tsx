@@ -45,7 +45,7 @@ export default function CustomerBookings() {
 
   useEffect(() => {
     fetchBookings()
-    const interval = setInterval(fetchBookings, 3000)
+    const interval = setInterval(fetchBookings, 30000)
     const handleStorage = (e: StorageEvent) => {
       if (e.key === 'ps_bookings_sync_v2') fetchBookings()
     }

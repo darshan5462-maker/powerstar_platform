@@ -59,7 +59,7 @@ export default function AdminBookings() {
 
   useEffect(() => {
     fetchBookings()
-    const interval = setInterval(fetchBookings, 3000)
+    const interval = setInterval(fetchBookings, 30000) // 30 seconds auto-refresh
     const handleStorage = (e: StorageEvent) => {
       if (e.key === 'ps_bookings_sync_v2') fetchBookings()
     }
@@ -125,7 +125,21 @@ export default function AdminBookings() {
   ]
 
   const filteredBookings = bookings.filter(b => {
-    const matchesFilter = filter === 'All' || b.status === filter
+    let matchesFilter = true
+    if (filter === 'All') {
+      matchesFilter = true
+    } else if (filter === 'pending_admin') {
+      matchesFilter = b.status === 'pending_admin' || b.status === 'pending' || b.status === 'requested' || !b.provider_id || (b as any).status === 'unassigned'
+    } else if (filter === 'provider_assigned') {
+      matchesFilter = b.status === 'provider_assigned' || b.status === 'accepted'
+    } else if (filter === 'confirmed') {
+      matchesFilter = b.status === 'confirmed' || b.status === 'payment_success'
+    } else if (filter === 'in_progress') {
+      matchesFilter = b.status === 'in_progress' || b.status === 'active'
+    } else {
+      matchesFilter = b.status === filter
+    }
+
     const matchesSearch =
       b.booking_ref.toLowerCase().includes(search.toLowerCase()) ||
       (b.customer?.full_name && b.customer.full_name.toLowerCase().includes(search.toLowerCase())) ||
@@ -207,7 +221,7 @@ export default function AdminBookings() {
         ) : (
           <div className="space-y-3">
             {filteredBookings.map(bk => {
-              const needsAssignment = bk.status === 'pending_admin'
+              const needsAssignment = bk.status === 'pending_admin' || bk.status === 'pending' || bk.status === 'requested' || !bk.provider?.full_name || !bk.provider_id
               return (
                 <div
                   key={bk.id}

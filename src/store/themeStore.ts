@@ -1,7 +1,37 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
-interface S { dark:boolean; toggle:()=>void }
-export const useThemeStore = create<S>()(persist(
-  (set)=>({ dark:false, toggle:()=>set(s=>{const n=!s.dark;document.documentElement.classList.toggle('dark',n);return{dark:n}}) }),
-  {name:'ps-theme'}
-))
+
+interface ThemeState {
+  dark: boolean
+  isDark: boolean
+  toggle: () => void
+  toggleTheme: () => void
+}
+
+export const useThemeStore = create<ThemeState>()(
+  persist(
+    (set, get) => ({
+      dark: false,
+      isDark: false,
+      toggle: () => {
+        const next = !get().dark
+        document.documentElement.classList.toggle('dark', next)
+        set({ dark: next, isDark: next })
+      },
+      toggleTheme: () => {
+        const next = !get().dark
+        document.documentElement.classList.toggle('dark', next)
+        set({ dark: next, isDark: next })
+      }
+    }),
+    {
+      name: 'ps-theme',
+      onRehydrateStorage: () => (state) => {
+        if (state) {
+          state.isDark = state.dark
+          document.documentElement.classList.toggle('dark', state.dark)
+        }
+      }
+    }
+  )
+)
