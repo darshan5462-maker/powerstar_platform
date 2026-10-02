@@ -1,272 +1,474 @@
-import { useEffect, useState, useCallback } from 'react'
-import { useNavigate } from 'react-router-dom'
+import React, { useEffect, useState, useCallback } from 'react'
+import { useNavigate, useSearchParams } from 'react-router-dom'
+import { motion } from 'framer-motion'
+import {
+  CheckCircle2,
+  Clock,
+  MapPin,
+  Phone,
+  ShieldCheck,
+  Zap,
+  ArrowRight,
+  Star,
+  Activity,
+  AlertCircle,
+  KeyRound,
+  FileText
+} from 'lucide-react'
 import { useAuthStore } from '@/store/authStore'
 import { supabase } from '@/lib/supabase'
-import Avatar from '@/components/ui/Avatar'
-import LiveMap from '@/components/ui/LiveMap'
+import { getCustomerBookings } from '@/services/api'
+import { Booking } from '@/types'
+import HeaderBar from '@/components/layout/HeaderBar'
+import UpiPaymentModal from '@/components/ui/UpiPaymentModal'
+import ReviewModal from '@/components/ui/ReviewModal'
+import { StatusBadge } from '@/components/ui/Badge'
 import toast from 'react-hot-toast'
 
-interface Coords { lat: number; lng: number }
-
-const SC: Record<string,{color:string;bg:string;label:string;icon:string}> = {
-  pending_admin:     {color:'#d97706',bg:'rgba(217,119,6,0.1)',  label:'Waiting for Assignment', icon:'⏳'},
-  provider_assigned: {color:'#3b82f6',bg:'rgba(59,130,246,0.1)', label:'Provider Assigned',    icon:'👤'},
-  payment_pending:   {color:'#f97316',bg:'rgba(249,115,22,0.1)', label:'Payment Pending',      icon:'💳'},
-  payment_success:   {color:'#16a34a',bg:'rgba(22,163,74,0.1)',  label:'Payment Success',      icon:'✅'},
-  confirmed:         {color:'#16a34a',bg:'rgba(22,163,74,0.1)',  label:'Booking Confirmed',    icon:'✅'},
-  in_progress:       {color:'#2563eb',bg:'rgba(37,99,235,0.1)',  label:'In Progress',          icon:'🔧'},
-  completed:         {color:'#16a34a',bg:'rgba(22,163,74,0.1)',  label:'Completed',            icon:'⭐'},
-}
+const TIMELINE_STEPS = [
+  { id: 'pending_admin', label: 'Request Received', desc: 'Powerstar admin matching technician' },
+  { id: 'provider_assigned', label: 'Provider Assigned', desc: 'Verified local expert selected' },
+  { id: 'confirmed', label: 'UPI Payment Confirmed', desc: 'Booking locked & scheduled' },
+  { id: 'in_progress', label: 'Service In Progress', desc: 'Technician on-site doing work' },
+  { id: 'completed', label: 'Service Completed', desc: 'Work verified & completed' },
+]
 
 export default function CustomerTrack() {
   const { profile } = useAuthStore()
   const nav = useNavigate()
-  const [bookings,      setBookings]      = useState<any[]>([])
-  const [selected,      setSelected]      = useState<string|null>(null)
-  const [loading,       setLoading]       = useState(true)
-  const [provCoords,    setProvCoords]    = useState<Coords|null>(null)
-  const [custCoords,    setCustCoords]    = useState<Coords|null>(null)
-  const [locGranted,    setLocGranted]    = useState(false)
-  const [isPaying,      setIsPaying]      = useState(false)
+  const [searchParams] = useSearchParams()
+  const requestedId = searchParams.get('id')
 
-  const activeStatuses = ['pending_admin','provider_assigned','payment_pending','payment_success','confirmed','in_progress']
+  const [bookings, setBookings] = useState<Booking[]>([])
+  const [selectedBookingId, setSelectedBookingId] = useState<string | null>(requestedId)
+  const [loading, setLoading] = useState(true)
 
-  const load = useCallback(async () => {
+  // Payment & Review Modals
+  const [payModalOpen, setPayModalOpen] = useState(false)
+  const [reviewModalOpen, setReviewModalOpen] = useState(false)
+
+  const loadBookings = useCallback(async () => {
     if (!profile?.id) return
-    const { data } = await supabase
-      .from('bookings')
-      .select(`*, category:service_categories(name,icon),
-        provider_profile:providers!bookings_provider_id_fkey(rating,
-          profile:profiles(full_name,phone))`)
-      .eq('customer_id', profile.id)
-      .in('status', activeStatuses)
-      .order('created_at', { ascending:false })
-    setBookings(data ?? [])
-    if (data?.length && !selected) setSelected(data[0].id)
+    setLoading(true)
+    const data = await getCustomerBookings(profile.id)
+    setBookings(data)
+
+    if (data.length > 0) {
+      if (requestedId && data.some(b => b.id === requestedId)) {
+        setSelectedBookingId(requestedId)
+      } else if (!selectedBookingId) {
+        // Default to first active or first booking
+        const active = data.find(b =>
+          ['pending_admin', 'provider_assigned', 'payment_pending', 'confirmed', 'in_progress'].includes(b.status)
+        )
+        setSelectedBookingId(active ? active.id : data[0].id)
+      }
+    }
     setLoading(false)
-  }, [profile?.id])
+  }, [profile?.id, requestedId, selectedBookingId])
 
-  useEffect(() => { load() }, [load])
-
-  // Get customer location
   useEffect(() => {
-    if (!navigator.geolocation) return
-    navigator.geolocation.getCurrentPosition(
-      pos => {
-        setCustCoords({ lat: pos.coords.latitude, lng: pos.coords.longitude })
-        setLocGranted(true)
-      },
-      () => setLocGranted(false),
-      { enableHighAccuracy: true }
-    )
-  }, [])
+    loadBookings()
+  }, [loadBookings])
 
-  // Realtime booking status
+  // Realtime updates subscription
   useEffect(() => {
     if (!profile?.id) return
-    const ch = supabase.channel(`ctrack-${profile.id}`)
-      .on('postgres_changes', { event:'UPDATE', schema:'public', table:'bookings',
-        filter:`customer_id=eq.${profile.id}` },
+    const channel = supabase
+      .channel(`cust-track-${profile.id}`)
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'bookings',
+          filter: `customer_id=eq.${profile.id}`
+        },
         (payload: any) => {
-          const u = payload.new
-          setBookings(prev => prev.map(b => b.id===u.id?{...b,...u}:b).filter(b=>activeStatuses.includes(b.status)))
-          if (u.status==='provider_assigned') toast.success('Provider Assigned!', {duration:5000})
-          if (u.status==='payment_pending')   toast.success('Payment required to confirm booking')
-          if (u.status==='confirmed')         toast.success('Booking confirmed! Provider is on the way. 🛵')
-          if (u.status==='in_progress')       toast.success('Job has started! 🔧')
-          if (u.status==='completed') {
-            toast.success('🎉 Job done! Please rate your experience.')
-            load()
-            setTimeout(() => nav('/dashboard/bookings'), 2500)
+          const updated = payload.new
+          setBookings(prev => prev.map(b => (b.id === updated.id ? { ...b, ...updated } : b)))
+
+          if (updated.status === 'provider_assigned') {
+            toast.success('🎉 A service professional has been assigned! Please complete UPI payment.')
+          } else if (updated.status === 'confirmed') {
+            toast.success('✅ Payment verified! Booking is confirmed.')
+          } else if (updated.status === 'in_progress') {
+            toast.success('🔧 Technician started the service job!')
+          } else if (updated.status === 'completed') {
+            toast.success('⭐ Service completed! Please leave a review.')
           }
         }
-      ).subscribe()
-    return () => { supabase.removeChannel(ch) }
-  }, [profile?.id, load])
+      )
+      .subscribe()
 
-  async function handleUpiPayment(bk: any) {
-    setIsPaying(true)
-    
-    // Simulate payment flow
-    setTimeout(async () => {
-      try {
-        const { error: pErr } = await supabase.from('payments').insert({
-          booking_id: bk.id,
-          customer_id: profile?.id,
-          provider_id: bk.provider_id,
-          amount: bk.total_amount,
-          method: 'upi',
-          status: 'success'
-        })
-        if (pErr) throw pErr
+    return () => {
+      supabase.removeChannel(channel)
+    }
+  }, [profile?.id])
 
-        const { error: bErr } = await supabase.from('bookings')
-          .update({ status: 'payment_success' })
-          .eq('id', bk.id)
-        if (bErr) throw bErr
-        
-        toast.success('UPI Payment successful!')
-        
-        // Immediately transition to confirmed based on backend hook, or simulate it here:
-        await supabase.from('bookings').update({ status: 'confirmed' }).eq('id', bk.id)
+  const currentBooking = bookings.find(b => b.id === selectedBookingId) || bookings[0]
 
-      } catch (err: any) {
-        toast.error('Payment failed: ' + err.message)
-      } finally {
-        setIsPaying(false)
-        load()
-      }
-    }, 2000)
+  // Determine active step index
+  const getStepIndex = (status: string) => {
+    if (status === 'pending_admin') return 0
+    if (status === 'provider_assigned' || status === 'payment_pending') return 1
+    if (status === 'payment_success' || status === 'confirmed') return 2
+    if (status === 'in_progress') return 3
+    if (status === 'completed') return 4
+    return 0
   }
 
-  const bk    = bookings.find(b => b.id===selected) ?? bookings[0]
-  const prov  = bk?.provider_profile
-  const name  = prov?.profile?.full_name ?? null
-  const phone = prov?.profile?.phone     ?? null
-  const sc    = SC[bk?.status ?? 'pending_admin'] ?? SC.pending_admin
-
-  if (loading) return (
-    <div style={{minHeight:'100vh',display:'flex',alignItems:'center',justifyContent:'center',background:'var(--bg)',flexDirection:'column',gap:16}}>
-      <div style={{width:44,height:44,border:'4px solid var(--border)',borderTop:'4px solid #f97316',borderRadius:'50%',animation:'spin 0.8s linear infinite'}}/>
-      <p style={{color:'var(--text2)',fontSize:14}}>Loading your booking...</p>
-      <style>{`@keyframes spin{to{transform:rotate(360deg)}}`}</style>
-    </div>
-  )
-
-  if (!bk) return (
-    <div style={{minHeight:'100vh',background:'var(--bg)',display:'flex',alignItems:'center',justifyContent:'center',padding:24}}>
-      <div style={{textAlign:'center',maxWidth:340}}>
-        <div style={{fontSize:64,marginBottom:16}}>📍</div>
-        <h2 style={{fontWeight:800,fontSize:22,fontFamily:'Plus Jakarta Sans,sans-serif',marginBottom:8}}>No Active Bookings</h2>
-        <p style={{color:'var(--text2)',fontSize:14,marginBottom:24,lineHeight:1.6}}>Book a service to track your provider in real-time here.</p>
-        <button className="btn btn-brand" style={{width:'100%',padding:'14px',fontSize:15}} onClick={()=>nav('/dashboard/book')}>+ Book a Service</button>
-      </div>
-    </div>
-  )
+  const currentStepIdx = currentBooking ? getStepIndex(currentBooking.status) : 0
 
   return (
-    <div style={{minHeight:'100vh',background:'var(--bg)',display:'flex',flexDirection:'column'}}>
-      {/* Status bar */}
-      <div style={{background:`linear-gradient(135deg,${sc.color},${sc.color}cc)`,padding:'14px 20px 18px',color:'#fff',position:'sticky',top:0,zIndex:50,flexShrink:0}}>
-        <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:bookings.length>1?10:0}}>
-          <button onClick={()=>nav('/dashboard')} style={{background:'rgba(255,255,255,0.2)',border:'none',borderRadius:8,padding:'6px 14px',color:'#fff',cursor:'pointer',fontSize:13,fontWeight:600}}>← Back</button>
-          <div style={{textAlign:'center'}}>
-            <p style={{fontWeight:800,fontSize:15}}>{sc.icon} {sc.label}</p>
+    <div className="min-h-screen bg-slate-50 dark:bg-navy-950 pb-24 lg:pb-12">
+      <HeaderBar title="Service Tracker" subtitle="Live updates on dispatch, payment & job status" showLocation={false} />
+
+      <main className="max-w-4xl mx-auto px-4 sm:px-6 pt-5 space-y-6">
+        {loading ? (
+          <div className="p-8 text-center bg-white dark:bg-navy-900 rounded-3xl border border-slate-200 dark:border-navy-800 animate-pulse">
+            <div className="h-6 bg-slate-200 dark:bg-navy-700 rounded w-1/3 mx-auto mb-4" />
+            <div className="h-4 bg-slate-200 dark:bg-navy-700 rounded w-1/2 mx-auto" />
           </div>
-          <div style={{display:'flex',alignItems:'center',gap:5,background:'rgba(255,255,255,0.2)',borderRadius:20,padding:'5px 12px',fontSize:11,fontWeight:700}}>
-            <div style={{width:6,height:6,borderRadius:'50%',background:'#fff',animation:'blink 1.5s ease-in-out infinite'}}/>LIVE
-          </div>
-        </div>
-      </div>
-
-      <LiveMap
-        providerCoords={provCoords}
-        customerCoords={custCoords}
-        providerName={name ?? 'Provider'}
-        customerName="You"
-        status={bk?.status}
-        height={220}
-      />
-
-      {/* Bottom sheet */}
-      <div style={{flex:1,background:'var(--card)',borderTopLeftRadius:22,borderTopRightRadius:22,marginTop:-10,position:'relative',zIndex:10,boxShadow:'0 -4px 24px rgba(0,0,0,0.1)'}}>
-        <div style={{width:40,height:4,borderRadius:2,background:'var(--border)',margin:'10px auto 0'}}/>
-        <div style={{padding:'14px 18px',overflowY:'auto',maxHeight:'calc(100vh - 340px)'}}>
-
-          {/* Status Message */}
-          <div style={{display:'flex',gap:12,marginBottom:16}}>
-            <div style={{flex:1,background:sc.bg,border:`1.5px solid ${sc.color}33`,borderRadius:14,padding:'14px 16px'}}>
-              <div style={{display:'flex',alignItems:'center',gap:8,marginBottom:5}}>
-                <span style={{fontSize:20}}>{sc.icon}</span>
-                <span style={{fontWeight:800,fontSize:15,color:sc.color}}>{sc.label}</span>
-              </div>
-              <p style={{fontSize:12,color:'var(--text2)',lineHeight:1.5}}>
-                {bk?.status==='pending_admin' && 'Waiting for provider assignment by admin.'}
-                {bk?.status==='provider_assigned' && 'A provider has been assigned! Waiting for provider acceptance.'}
-                {bk?.status==='payment_pending' && 'Provider accepted. Please complete the UPI payment to confirm the booking.'}
-                {bk?.status==='payment_success' && 'Payment successful! Confirming...'}
-                {bk?.status==='confirmed' && 'Booking confirmed! Provider will arrive shortly.'}
-                {bk?.status==='in_progress' && 'Provider is working at your location. Share OTP to complete.'}
+        ) : bookings.length === 0 ? (
+          <div className="p-12 text-center bg-white dark:bg-navy-900 rounded-3xl border border-slate-200 dark:border-navy-800 shadow-subtle space-y-4">
+            <div className="w-16 h-16 rounded-2xl bg-brand-500/10 text-brand-500 flex items-center justify-center mx-auto text-2xl">
+              📍
+            </div>
+            <div>
+              <h3 className="font-bold text-base text-slate-900 dark:text-white">No Active Tracking</h3>
+              <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 max-w-sm mx-auto">
+                You do not have any active service requests right now.
               </p>
             </div>
+            <button
+              type="button"
+              onClick={() => nav('/dashboard/book')}
+              className="px-5 py-2.5 rounded-xl bg-brand-500 hover:bg-brand-600 text-white text-xs font-bold shadow-brand transition-colors"
+            >
+              Book a Service
+            </button>
           </div>
-
-          {/* Payment Section */}
-          {bk?.status === 'payment_pending' && (
-            <div style={{background:'var(--bg2)',borderRadius:16,padding:16,marginBottom:14,border:'2px solid var(--brand)'}}>
-              <p style={{fontWeight:800,fontSize:16,marginBottom:10,color:'var(--brand)'}}>Complete Payment</p>
-              <div style={{display:'flex',justifyContent:'space-between',marginBottom:12}}>
-                <span style={{color:'var(--text2)',fontSize:14}}>Amount to Pay</span>
-                <span style={{fontWeight:800,fontSize:18}}>₹{(bk?.total_amount??0).toLocaleString('en-IN')}</span>
-              </div>
-              
-              <div style={{marginBottom:16}}>
-                <p style={{fontWeight:600, fontSize:13, marginBottom:10}}>PAYMENT METHOD</p>
-                <div style={{display:'grid', gridTemplateColumns:'1fr'}}>
-                  <button style={{padding:'12px', borderRadius:10, border:`2px solid var(--brand)`, background:'var(--brand-light)', display:'flex', alignItems:'center', gap:10}}>
-                    <div style={{fontSize:24}}>📱</div>
-                    <div style={{fontSize:14, fontWeight:700, color:'var(--brand)'}}>UPI</div>
-                    <div style={{marginLeft:'auto', fontSize:18, color:'var(--brand)'}}>✓</div>
+        ) : (
+          <div className="space-y-6">
+            {/* Multiple Bookings Switcher Pill Bar if > 1 */}
+            {bookings.length > 1 && (
+              <div className="flex items-center gap-2 overflow-x-auto no-scrollbar pb-1">
+                {bookings.map(b => (
+                  <button
+                    key={b.id}
+                    type="button"
+                    onClick={() => setSelectedBookingId(b.id)}
+                    className={`px-3.5 py-2 rounded-2xl text-xs font-semibold whitespace-nowrap transition-all flex items-center gap-2 border ${
+                      selectedBookingId === b.id
+                        ? 'bg-brand-500 text-white border-brand-500 shadow-brand font-bold'
+                        : 'bg-white dark:bg-navy-900 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-navy-800'
+                    }`}
+                  >
+                    <span>{b.category?.icon || '⚡'}</span>
+                    <span>#{b.booking_ref}</span>
+                    <span className="text-[10px] opacity-80 uppercase">({b.status.replace('_', ' ')})</span>
                   </button>
+                ))}
+              </div>
+            )}
+
+            {currentBooking && (
+              <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                {/* ── LEFT 2 COLS: TIMELINE & ACTIONS ── */}
+                <div className="lg:col-span-2 space-y-5">
+                  {/* Status Card Header */}
+                  <div className="p-6 rounded-3xl bg-white dark:bg-navy-900 border border-slate-200/80 dark:border-navy-800 shadow-card space-y-4">
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <div className="flex items-center gap-2 mb-1">
+                          <span className="text-2xl">{currentBooking.category?.icon || '⚡'}</span>
+                          <h2 className="text-lg font-bold text-slate-900 dark:text-white">
+                            {currentBooking.category?.name || 'Powerstar Service'}
+                          </h2>
+                        </div>
+                        <p className="text-xs text-slate-500 dark:text-slate-400 font-mono">
+                          Booking ID: #{currentBooking.booking_ref} • {currentBooking.district}
+                        </p>
+                      </div>
+                      <StatusBadge status={currentBooking.status} />
+                    </div>
+
+                    {/* Action Alert Banner */}
+                    {(currentBooking.status === 'provider_assigned' || currentBooking.status === 'payment_pending') && (
+                      <div className="p-4 rounded-2xl bg-brand-500/10 border border-brand-500/30 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                        <div className="flex items-center gap-2.5">
+                          <div className="w-9 h-9 rounded-xl bg-brand-500 text-white flex items-center justify-center font-bold text-sm shadow-brand flex-shrink-0">
+                            UPI
+                          </div>
+                          <div>
+                            <h4 className="font-bold text-xs text-slate-900 dark:text-white">
+                              Provider Assigned! UPI Payment Required
+                            </h4>
+                            <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                              Amount: ₹{currentBooking.total_amount} • 100% Secure via GPay, PhonePe, Paytm
+                            </p>
+                          </div>
+                        </div>
+
+                        <button
+                          type="button"
+                          onClick={() => setPayModalOpen(true)}
+                          className="px-4 py-2.5 rounded-xl bg-gradient-to-r from-brand-500 to-brand-600 hover:from-brand-600 hover:to-brand-700 text-white font-bold text-xs shadow-brand flex items-center justify-center gap-1.5 active:scale-95 transition-all flex-shrink-0"
+                        >
+                          <Zap className="w-3.5 h-3.5 fill-white" />
+                          <span>Pay ₹{currentBooking.total_amount} Now</span>
+                        </button>
+                      </div>
+                    )}
+
+                    {/* Completed Banner */}
+                    {currentBooking.status === 'completed' && currentBooking.provider_id && (
+                      <div className="p-4 rounded-2xl bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-between gap-3">
+                        <div className="flex items-center gap-2">
+                          <CheckCircle2 className="w-5 h-5 text-emerald-500" />
+                          <div>
+                            <h4 className="font-bold text-xs text-slate-900 dark:text-white">Job Completed!</h4>
+                            <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                              Please rate your experience with {currentBooking.provider?.full_name || 'technician'}.
+                            </p>
+                          </div>
+                        </div>
+
+                        <button
+                          type="button"
+                          onClick={() => setReviewModalOpen(true)}
+                          className="px-3.5 py-2 rounded-xl bg-amber-500 text-white font-bold text-xs flex items-center gap-1.5 shadow-sm"
+                        >
+                          <Star className="w-3.5 h-3.5 fill-white" />
+                          <span>Rate Service</span>
+                        </button>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Progressive Timeline Tracker */}
+                  <div className="p-6 rounded-3xl bg-white dark:bg-navy-900 border border-slate-200/80 dark:border-navy-800 shadow-card space-y-5">
+                    <h3 className="font-bold text-sm text-slate-900 dark:text-white">
+                      Live Order Milestones
+                    </h3>
+
+                    <div className="space-y-6 relative before:absolute before:left-3.5 before:top-3 before:bottom-3 before:w-0.5 before:bg-slate-200 dark:before:bg-navy-700">
+                      {TIMELINE_STEPS.map((step, idx) => {
+                        const isDone = currentStepIdx > idx
+                        const isCurrent = currentStepIdx === idx
+                        return (
+                          <div key={step.id} className="relative flex items-start gap-4">
+                            <div
+                              className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold z-10 transition-all flex-shrink-0 ${
+                                isDone
+                                  ? 'bg-emerald-500 text-white shadow-sm'
+                                  : isCurrent
+                                  ? 'bg-brand-500 text-white ring-4 ring-brand-500/20 pulse-badge'
+                                  : 'bg-slate-100 dark:bg-navy-800 text-slate-400 border border-slate-200 dark:border-navy-700'
+                              }`}
+                            >
+                              {isDone ? '✓' : idx + 1}
+                            </div>
+                            <div className="flex-1">
+                              <h4
+                                className={`text-xs font-bold ${
+                                  isCurrent
+                                    ? 'text-brand-600 dark:text-brand-400'
+                                    : isDone
+                                    ? 'text-slate-900 dark:text-white'
+                                    : 'text-slate-400'
+                                }`}
+                              >
+                                {step.label}
+                              </h4>
+                              <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
+                                {step.desc}
+                              </p>
+                            </div>
+                          </div>
+                        )
+                      })}
+                    </div>
+                  </div>
+
+                  {/* Security OTP Verification Box (When confirmed / in-progress) */}
+                  {(currentBooking.status === 'confirmed' || currentBooking.status === 'in_progress') && (
+                    <div className="p-5 rounded-3xl bg-white dark:bg-navy-900 border border-slate-200/80 dark:border-navy-800 shadow-card">
+                      <div className="flex items-center gap-2 mb-3">
+                        <KeyRound className="w-4 h-4 text-brand-500" />
+                        <h4 className="font-bold text-xs text-slate-900 dark:text-white">
+                          Service Verification OTPs
+                        </h4>
+                      </div>
+                      <p className="text-[11px] text-slate-500 dark:text-slate-400 mb-3">
+                        Share these OTPs only with your technician on-site to verify starting and finishing the service.
+                      </p>
+
+                      <div className="grid grid-cols-2 gap-3">
+                        <div className="p-3 rounded-2xl bg-slate-50 dark:bg-navy-800 border border-slate-200 dark:border-navy-700 text-center">
+                          <span className="text-[10px] text-slate-400 font-semibold uppercase">Start Job OTP</span>
+                          <p className="text-xl font-black text-brand-600 dark:text-brand-400 font-mono tracking-widest mt-0.5">
+                            {currentBooking.start_otp || '4821'}
+                          </p>
+                        </div>
+                        <div className="p-3 rounded-2xl bg-slate-50 dark:bg-navy-800 border border-slate-200 dark:border-navy-700 text-center">
+                          <span className="text-[10px] text-slate-400 font-semibold uppercase">Complete Job OTP</span>
+                          <p className="text-xl font-black text-emerald-600 dark:text-emerald-400 font-mono tracking-widest mt-0.5">
+                            {currentBooking.end_otp || '9273'}
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  )}
                 </div>
-              </div>
 
-              <button className="btn btn-brand" style={{width:'100%',padding:'14px',fontSize:15}} disabled={isPaying} onClick={() => handleUpiPayment(bk)}>
-                {isPaying ? 'Processing UPI Payment...' : 'Pay via UPI'}
-              </button>
-            </div>
-          )}
+                {/* ── RIGHT 1 COL: ASSIGNED PROVIDER & ORDER SUMMARY ── */}
+                <div className="space-y-5">
+                  {/* Assigned Provider Card */}
+                  <div className="p-5 rounded-3xl bg-white dark:bg-navy-900 border border-slate-200/80 dark:border-navy-800 shadow-card space-y-4">
+                    <h3 className="font-bold text-xs uppercase tracking-wider text-slate-400">
+                      Assigned Service Partner
+                    </h3>
 
-          {/* OTP Section */}
-          {['confirmed','in_progress'].includes(bk?.status) && (
-            <div style={{display:'flex',justifyContent:'center',marginBottom:16}}>
-               <div style={{background:'linear-gradient(135deg,rgba(249,115,22,0.08),rgba(234,88,12,0.04))',border:'2px solid rgba(249,115,22,0.25)',borderRadius:14,padding:'12px 14px',textAlign:'center',minWidth:140}}>
-                <p style={{fontSize:10,color:'var(--text3)',fontWeight:700,textTransform:'uppercase',letterSpacing:'0.5px',marginBottom:6}}>OTP</p>
-                <p style={{fontSize:28,fontWeight:900,letterSpacing:6,color:'var(--brand)',fontFamily:'monospace'}}>{bk?.status==='confirmed'?bk?.start_otp:bk?.end_otp}</p>
-                <p style={{fontSize:10,color:'var(--text3)',marginTop:4,lineHeight:1.3}}>{bk?.status==='confirmed'?'Start OTP':'Completion OTP'}</p>
-              </div>
-            </div>
-          )}
+                    {currentBooking.provider?.full_name ? (
+                      <div className="space-y-3">
+                        <div className="flex items-center gap-3">
+                          <div className="w-12 h-12 rounded-2xl bg-brand-500/10 border border-brand-500/30 text-brand-500 flex items-center justify-center text-xl font-bold">
+                            👷
+                          </div>
+                          <div>
+                            <div className="flex items-center gap-1.5">
+                              <h4 className="font-bold text-sm text-slate-900 dark:text-white">
+                                {currentBooking.provider.full_name}
+                              </h4>
+                              <ShieldCheck className="w-4 h-4 text-emerald-500" />
+                            </div>
+                            <p className="text-xs text-slate-500 dark:text-slate-400">
+                              KYC Verified Specialist
+                            </p>
+                          </div>
+                        </div>
 
-          {/* Provider card */}
-          {name && (
-            <div style={{background:'var(--bg2)',borderRadius:16,padding:16,marginBottom:14,border:'1px solid var(--border)'}}>
-              <div style={{display:'flex',alignItems:'center',gap:14}}>
-                <Avatar name={name} size={50} color="#f97316"/>
-                <div style={{flex:1}}>
-                  <p style={{fontWeight:800,fontSize:16}}>{name}</p>
-                  <div style={{display:'flex',alignItems:'center',gap:8,marginTop:4,flexWrap:'wrap'}}>
-                    <span style={{fontSize:12,color:'#d97706',fontWeight:700}}>★{prov?.rating>0?Number(prov.rating).toFixed(1):'New'}</span>
-                    <span style={{fontSize:12,color:'var(--text2)'}}>{bk?.category?.icon} {bk?.category?.name}</span>
-                    <span className="badge badge-green" style={{fontSize:10}}>✓ Verified</span>
+                        <div className="flex items-center justify-between text-xs p-2.5 rounded-xl bg-slate-50 dark:bg-navy-800 border border-slate-200 dark:border-navy-700">
+                          <span className="text-slate-400">Rating</span>
+                          <span className="font-bold text-slate-900 dark:text-white flex items-center gap-1">
+                            <Star className="w-3.5 h-3.5 fill-amber-400 text-amber-400" />
+                            {currentBooking.provider_details?.rating || '4.9'} ({currentBooking.provider_details?.total_jobs || '120+'} jobs)
+                          </span>
+                        </div>
+
+                        {currentBooking.provider?.phone && (
+                          <a
+                            href={`tel:${currentBooking.provider.phone}`}
+                            className="w-full py-2.5 px-3 rounded-xl bg-slate-100 dark:bg-navy-800 hover:bg-slate-200 dark:hover:bg-navy-700 text-slate-700 dark:text-slate-200 text-xs font-bold flex items-center justify-center gap-2 transition-colors"
+                          >
+                            <Phone className="w-3.5 h-3.5 text-brand-500" />
+                            <span>Call Professional</span>
+                          </a>
+                        )}
+                      </div>
+                    ) : (
+                      <div className="p-4 rounded-2xl bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-900/40 text-center space-y-2">
+                        <div className="w-8 h-8 rounded-full bg-amber-500/20 text-amber-600 dark:text-amber-400 flex items-center justify-center mx-auto text-sm animate-spin">
+                          ⏳
+                        </div>
+                        <p className="font-bold text-xs text-amber-900 dark:text-amber-200">
+                          Matching in progress
+                        </p>
+                        <p className="text-[11px] text-amber-700 dark:text-amber-400">
+                          Admin is assigning a verified technician in {currentBooking.district}.
+                        </p>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Summary & Price Breakdown */}
+                  <div className="p-5 rounded-3xl bg-white dark:bg-navy-900 border border-slate-200/80 dark:border-navy-800 shadow-card space-y-3 text-xs">
+                    <h3 className="font-bold text-xs uppercase tracking-wider text-slate-400">
+                      Booking Summary
+                    </h3>
+
+                    <div className="space-y-2 text-slate-600 dark:text-slate-400">
+                      <div className="flex justify-between">
+                        <span>Scheduled Slot</span>
+                        <span className="font-semibold text-slate-900 dark:text-white text-right">
+                          {currentBooking.scheduled_at || 'Scheduled'}
+                        </span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span>Address</span>
+                        <span className="font-semibold text-slate-900 dark:text-white truncate max-w-[140px] text-right">
+                          {currentBooking.address}
+                        </span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span>Base Amount</span>
+                        <span>₹{currentBooking.base_amount}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span>Platform Fee (5%)</span>
+                        <span>₹{currentBooking.platform_fee}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span>GST (18%)</span>
+                        <span>₹{currentBooking.gst_amount}</span>
+                      </div>
+                      <div className="pt-2 border-t border-slate-200 dark:border-navy-700 flex justify-between font-bold text-sm text-slate-900 dark:text-white">
+                        <span>Total Paid / Payable</span>
+                        <span className="text-brand-600 dark:text-brand-400 font-black">
+                          ₹{currentBooking.total_amount}
+                        </span>
+                      </div>
+                    </div>
                   </div>
                 </div>
               </div>
-            </div>
-          )}
-
-          {/* Booking summary */}
-          <div style={{background:'var(--bg2)',borderRadius:14,padding:14,marginBottom:14,display:'grid',gridTemplateColumns:'1fr 1fr',gap:10}}>
-            {[
-              ['Booking', bk?.booking_ref??'—'],
-              ['Service', `${bk?.category?.icon??''} ${bk?.category?.name??'—'}`],
-              ['Address', bk?.address??'—'],
-              ['Amount',  `₹${(bk?.total_amount??0).toLocaleString('en-IN')}`],
-            ].map(([k,v],i)=>(
-              <div key={i}>
-                <p style={{fontSize:10,color:'var(--text3)',marginBottom:2,textTransform:'uppercase',letterSpacing:'0.3px'}}>{k}</p>
-                <p style={{fontSize:12,fontWeight:600,wordBreak:'break-word'}}>{v}</p>
-              </div>
-            ))}
+            )}
           </div>
+        )}
+      </main>
 
-          <div style={{display:'flex',gap:10,paddingBottom:20}}>
-            <a href="tel:+918045678900" className="btn btn-outline" style={{flex:1,padding:'13px',borderRadius:12,textDecoration:'none',display:'flex',alignItems:'center',justifyContent:'center',gap:6}}>
-              📞 Support
-            </a>
-          </div>
-        </div>
-      </div>
+      {/* UPI Payment Modal */}
+      {currentBooking && (
+        <UpiPaymentModal
+          isOpen={payModalOpen}
+          onClose={() => setPayModalOpen(false)}
+          booking={{
+            id: currentBooking.id,
+            booking_ref: currentBooking.booking_ref,
+            customer_id: currentBooking.customer_id,
+            provider_id: currentBooking.provider_id,
+            total_amount: currentBooking.total_amount,
+            base_amount: currentBooking.base_amount,
+            platform_fee: currentBooking.platform_fee,
+            gst_amount: currentBooking.gst_amount,
+            category: currentBooking.category
+          }}
+          onSuccess={() => {
+            loadBookings()
+          }}
+        />
+      )}
+
+      {/* Review Modal */}
+      {currentBooking && currentBooking.provider_id && (
+        <ReviewModal
+          isOpen={reviewModalOpen}
+          onClose={() => setReviewModalOpen(false)}
+          booking={{
+            id: currentBooking.id,
+            booking_ref: currentBooking.booking_ref,
+            customer_id: currentBooking.customer_id,
+            provider_id: currentBooking.provider_id,
+            provider: currentBooking.provider,
+            category: currentBooking.category
+          }}
+          onSubmitted={() => {
+            loadBookings()
+          }}
+        />
+      )}
     </div>
   )
 }

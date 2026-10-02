@@ -1,65 +1,136 @@
-import PageHeader from '@/components/layout/PageHeader'
-import StatCard from '@/components/ui/StatCard'
-import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts'
-
-const WEEKLY = [
-  {day:'Mon',amt:1200},{day:'Tue',amt:1650},{day:'Wed',amt:980},
-  {day:'Thu',amt:2100},{day:'Fri',amt:1400},{day:'Sat',amt:2400},{day:'Sun',amt:1450},
-]
-const HISTORY = [
-  {date:'Jun 16',customer:'Ramesh K.',svc:'Pipe Leakage',gross:'₹580',net:'₹522',status:'pending'},
-  {date:'Jun 16',customer:'Priya S.', svc:'Tap Repair',  gross:'₹450',net:'₹405',status:'settled'},
-  {date:'Jun 15',customer:'Kavitha M.',svc:'Fitting',    gross:'₹960',net:'₹864',status:'settled'},
-  {date:'Jun 14',customer:'Sunil G.', svc:'Pipeline',    gross:'₹1,200',net:'₹1,080',status:'settled'},
-]
+import React, { useState, useEffect } from 'react'
+import {
+  DollarSign,
+  TrendingUp,
+  CreditCard,
+  ShieldCheck,
+  Calendar,
+  CheckCircle2,
+  ArrowDownRight,
+  ArrowUpRight
+} from 'lucide-react'
+import { useAuthStore } from '@/store/authStore'
+import { getProviderAssignedJobs } from '@/services/api'
+import { Booking } from '@/types'
+import HeaderBar from '@/components/layout/HeaderBar'
 
 export default function ProviderEarnings() {
+  const { profile } = useAuthStore()
+  const [jobs, setJobs] = useState<Booking[]>([])
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    if (!profile?.id) return
+    const fetch = async () => {
+      setLoading(true)
+      const data = await getProviderAssignedJobs(profile.id)
+      setJobs(data)
+      setLoading(false)
+    }
+    fetch()
+  }, [profile?.id])
+
+  const completedJobs = jobs.filter(j => j.status === 'completed')
+  const totalPayout = completedJobs.reduce((acc, j) => acc + Math.round((j.total_amount || 0) * 0.90), 0)
+  const pendingPayout = jobs
+    .filter(j => ['confirmed', 'in_progress'].includes(j.status))
+    .reduce((acc, j) => acc + Math.round((j.total_amount || 0) * 0.90), 0)
+
   return (
-    <div>
-      <PageHeader title="Earnings" subtitle="Your income overview and payment history" />
-      <div className="page-content">
-        <div style={{display:'grid',gridTemplateColumns:'repeat(4,1fr)',gap:16,marginBottom:24}}>
-          <StatCard icon="💰" iconBg="rgba(249,115,22,0.1)" label="Today"       value="₹1,450" change="₹280 vs yesterday" up />
-          <StatCard icon="📅" iconBg="rgba(22,163,74,0.1)"  label="This Week"   value="₹8,200" change="12% vs last week" up />
-          <StatCard icon="🗓️" iconBg="rgba(37,99,235,0.1)"  label="This Month"  value="₹28,400" change="8% vs last month" up />
-          <StatCard icon="📋" iconBg="rgba(217,119,6,0.1)"  label="Total Jobs"  value="142" />
-        </div>
+    <div className="min-h-screen bg-slate-50 dark:bg-navy-950 pb-24 lg:pb-12">
+      <HeaderBar title="Earnings & Settlement Ledger" subtitle="90% direct payout per completed service job" showLocation={false} />
 
-        <div className="glass" style={{padding:24,marginBottom:20}}>
-          <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:20}}>
-            <h3 style={{fontWeight:700,fontSize:15}}>Weekly Earnings</h3>
-            <span className="badge badge-green">↑ 12% vs last week</span>
+      <main className="max-w-4xl mx-auto px-4 sm:px-6 pt-5 space-y-6">
+        {/* Earnings Card */}
+        <div className="p-6 sm:p-8 rounded-3xl bg-gradient-to-br from-navy-900 via-navy-800 to-navy-950 text-white border border-navy-700 shadow-xl space-y-6">
+          <div>
+            <span className="text-xs font-semibold text-slate-300 uppercase tracking-wider">
+              Total Settled Earnings
+            </span>
+            <div className="flex items-baseline gap-2 mt-1">
+              <span className="text-3xl sm:text-4xl font-black text-emerald-400 font-display">
+                ₹{totalPayout.toLocaleString('en-IN')}
+              </span>
+              <span className="text-xs text-slate-400">via Instant UPI Settlement</span>
+            </div>
           </div>
-          <ResponsiveContainer width="100%" height={180}>
-            <BarChart data={WEEKLY} barSize={32}>
-              <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" vertical={false} />
-              <XAxis dataKey="day" tick={{fill:'var(--text2)',fontSize:12}} axisLine={false} tickLine={false} />
-              <YAxis hide />
-              <Tooltip contentStyle={{background:'var(--card)',border:'1px solid var(--border)',borderRadius:10,fontFamily:'Inter,sans-serif',fontSize:12}} formatter={(v:number)=>['₹'+v,'Earned']} />
-              <Bar dataKey="amt" fill="#f97316" radius={[6,6,0,0]} opacity={0.9} />
-            </BarChart>
-          </ResponsiveContainer>
+
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 pt-4 border-t border-navy-700/80 text-xs">
+            <div>
+              <span className="text-slate-400 block">Pending Clearance</span>
+              <span className="font-extrabold text-amber-400 text-sm mt-0.5 block">
+                ₹{pendingPayout.toLocaleString('en-IN')}
+              </span>
+            </div>
+            <div>
+              <span className="text-slate-400 block">Completed Jobs</span>
+              <span className="font-extrabold text-white text-sm mt-0.5 block">
+                {completedJobs.length} Jobs
+              </span>
+            </div>
+            <div className="col-span-2 sm:col-span-1">
+              <span className="text-slate-400 block">Payout Share</span>
+              <span className="font-extrabold text-brand-400 text-sm mt-0.5 block">
+                90% of Total Amount
+              </span>
+            </div>
+          </div>
         </div>
 
-        <div className="glass" style={{overflow:'hidden'}}>
-          <div style={{padding:'16px 20px',borderBottom:'1px solid var(--border)',fontWeight:700,fontSize:14}}>Payment History</div>
-          <table className="data-table">
-            <thead><tr><th>Date</th><th>Customer</th><th>Service</th><th>Gross</th><th>Net (90%)</th><th>Status</th></tr></thead>
-            <tbody>
-              {HISTORY.map((h,i)=>(
-                <tr key={i}>
-                  <td style={{color:'var(--text2)',fontSize:12}}>{h.date}</td>
-                  <td style={{fontWeight:500}}>{h.customer}</td>
-                  <td style={{color:'var(--text2)'}}>🔧 {h.svc}</td>
-                  <td>{h.gross}</td>
-                  <td style={{fontWeight:700,color:'var(--brand)'}}>{h.net}</td>
-                  <td><span className={h.status==='settled'?'badge badge-green':'badge badge-yellow'}>{h.status}</span></td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+        {/* Payout History Ledger */}
+        <div className="p-6 rounded-3xl bg-white dark:bg-navy-900 border border-slate-200/80 dark:border-navy-800 shadow-card space-y-4">
+          <h3 className="font-bold text-base text-slate-900 dark:text-white">
+            Payout Breakdown by Service
+          </h3>
+
+          {completedJobs.length === 0 ? (
+            <div className="p-8 text-center bg-slate-50 dark:bg-navy-800 rounded-2xl text-xs text-slate-400">
+              No completed jobs yet. Once you complete a job with customer End OTP, your 90% payout appears here.
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {completedJobs.map(job => {
+                const payout = Math.round(job.total_amount * 0.90)
+                const platformFee = Math.round(job.total_amount * 0.10)
+                return (
+                  <div
+                    key={job.id}
+                    className="p-4 rounded-2xl bg-slate-50 dark:bg-navy-800/80 border border-slate-200 dark:border-navy-700 flex items-center justify-between gap-3 text-xs"
+                  >
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 rounded-xl bg-emerald-500/10 text-emerald-500 flex items-center justify-center text-lg flex-shrink-0">
+                        {job.category?.icon || '⚡'}
+                      </div>
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <h4 className="font-bold text-slate-900 dark:text-white">
+                            {job.category?.name || 'Service Job'}
+                          </h4>
+                          <span className="font-mono text-[10px] text-slate-400 font-semibold">
+                            #{job.booking_ref}
+                          </span>
+                        </div>
+                        <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
+                          Customer: {job.customer?.full_name || 'Customer'} • {job.district}
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="text-right">
+                      <span className="font-black text-emerald-600 dark:text-emerald-400 text-sm block">
+                        +₹{payout}
+                      </span>
+                      <span className="text-[10px] text-slate-400">
+                        Paid via UPI
+                      </span>
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          )}
         </div>
-      </div>
+      </main>
     </div>
   )
 }

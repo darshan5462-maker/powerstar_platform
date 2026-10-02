@@ -1,288 +1,243 @@
-import { useEffect, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import React, { useEffect, useState } from 'react'
+import {
+  Users,
+  Search,
+  ShieldCheck,
+  Star,
+  MapPin,
+  Phone,
+  CheckCircle2,
+  XCircle,
+  Clock,
+  Filter,
+  RefreshCw,
+  Plus
+} from 'lucide-react'
 import { supabase } from '@/lib/supabase'
-import { useAuthStore } from '@/store/authStore'
-import PageHeader from '@/components/layout/PageHeader'
+import { getVerifiedProvidersList, updateProviderKycStatus } from '@/services/api'
+import { ProviderProfile } from '@/types'
 import { StatusBadge } from '@/components/ui/Badge'
-import Avatar from '@/components/ui/Avatar'
+import HeaderBar from '@/components/layout/HeaderBar'
 import toast from 'react-hot-toast'
 
 export default function AdminProviders() {
-  const navigate = useNavigate()
-  const setViewAsRole = useAuthStore(s => s.setViewAsRole)
-  const [providers, setProviders] = useState<any[]>([])
-  const [loading,   setLoading]   = useState(true)
-  const [search,    setSearch]    = useState('')
-  const [kycFilter, setKycFilter] = useState('all')
+  const [providers, setProviders] = useState<ProviderProfile[]>([])
+  const [loading, setLoading] = useState(true)
+  const [search, setSearch] = useState('')
+  const [kycFilter, setKycFilter] = useState<'all' | 'verified' | 'pending' | 'rejected'>('all')
 
-  useEffect(() => { load() }, [])
-
-  async function load() {
+  const fetchProviders = async () => {
     setLoading(true)
-
-    // Load all provider-role profiles first
-    const { data: profiles } = await supabase
-      .from('profiles')
-      .select('*')
-      .eq('role', 'provider')
-      .order('created_at', { ascending: false })
-
-    if (!profiles || profiles.length === 0) {
-      setProviders([])
-      setLoading(false)
-      return
-    }
-
-    // Load their providers table rows (has kyc_status, is_online, category)
-    const ids = profiles.map(p => p.id)
-    const { data: provRows } = await supabase
-      .from('providers')
-      .select('*, category:service_categories(name, icon)')
-      .in('id', ids)
-
-    // Load category names separately for providers that have one
-    const provMap: Record<string, any> = {}
-    for (const row of provRows ?? []) {
-      provMap[row.id] = row
-    }
-
-    // Merge: profile data + providers row data
-    const merged = profiles.map(p => ({
-      ...p,                          // full_name, phone, district, created_at etc
-      profile: p,                    // keep nested profile reference too
-      kyc_status:  provMap[p.id]?.kyc_status  ?? 'pending',
-      is_online:   provMap[p.id]?.is_online   ?? false,
-      rating:      provMap[p.id]?.rating      ?? 0,
-      total_jobs:  provMap[p.id]?.total_jobs  ?? 0,
-      hourly_rate: provMap[p.id]?.hourly_rate ?? 0,
-      category:    provMap[p.id]?.category    ?? null,
-      hasProviderRow: !!provMap[p.id],
-    }))
-
-    setProviders(merged)
+    const data = await getVerifiedProvidersList()
+    setProviders(data)
     setLoading(false)
   }
 
+  useEffect(() => {
+    fetchProviders()
+  }, [])
+
+  async function handleVerify(providerId: string) {
+    const res = await updateProviderKycStatus(providerId, 'verified')
+    if (res.success) {
+      toast.success('Provider marked as Verified!')
+      fetchProviders()
+    } else {
+      toast.error(res.error || 'Failed to update')
+    }
+  }
+
+  async function handleReject(providerId: string) {
+    const res = await updateProviderKycStatus(providerId, 'rejected')
+    if (res.success) {
+      toast.success('Provider KYC rejected')
+      fetchProviders()
+    } else {
+      toast.error(res.error || 'Failed to update')
+    }
+  }
+
   const filtered = providers.filter(p => {
-    const matchS = !search ||
-      (p.full_name ?? '').toLowerCase().includes(search.toLowerCase()) ||
-      (p.district  ?? '').toLowerCase().includes(search.toLowerCase())
-    const matchK = kycFilter === 'all' || p.kyc_status === kycFilter
-    return matchS && matchK
+    const matchesKyc = kycFilter === 'all' || p.kyc_status === kycFilter
+    const matchesSearch =
+      (p.profile?.full_name && p.profile.full_name.toLowerCase().includes(search.toLowerCase())) ||
+      (p.profile?.district && p.profile.district.toLowerCase().includes(search.toLowerCase())) ||
+      (p.category?.name && p.category.name.toLowerCase().includes(search.toLowerCase())) ||
+      (p.bio && p.bio.toLowerCase().includes(search.toLowerCase()))
+    return matchesKyc && matchesSearch
   })
 
-  // Approve KYC — upsert into providers table, update local state immediately
-  async function approve(id: string, name: string) {
-    try {
-      // Upsert so it works whether providers row exists or not
-      const { error } = await supabase
-        .from('providers')
-        .upsert({ id, kyc_status: 'verified' }, { onConflict: 'id' })
-      if (error) throw error
-
-      // Send notification to provider
-      await supabase.from('notifications').insert({
-        user_id: id,
-        title: '✅ KYC Approved!',
-        body: 'Your KYC has been approved. Go online from your dashboard to start receiving bookings!',
-        type: 'kyc',
-      })
-
-      // Update local state immediately — no reload needed
-      setProviders(prev => prev.map(p =>
-        p.id === id ? { ...p, kyc_status: 'verified', hasProviderRow: true } : p
-      ))
-      toast.success(`${name} — KYC Approved ✅`)
-    } catch (err: any) {
-      toast.error('Approve failed: ' + err.message)
-    }
-  }
-
-  // Reject KYC
-  async function reject(id: string, name: string) {
-    try {
-      const { error } = await supabase
-        .from('providers')
-        .upsert({ id, kyc_status: 'rejected' }, { onConflict: 'id' })
-      if (error) throw error
-
-      await supabase.from('notifications').insert({
-        user_id: id,
-        title: '❌ KYC Rejected',
-        body: 'Your KYC documents were rejected. Please re-upload clear, readable documents.',
-        type: 'kyc',
-      })
-
-      setProviders(prev => prev.map(p =>
-        p.id === id ? { ...p, kyc_status: 'rejected', hasProviderRow: true } : p
-      ))
-      toast.error(`${name} — KYC Rejected`)
-    } catch (err: any) {
-      toast.error('Reject failed: ' + err.message)
-    }
-  }
-
-  // Suspend / restore
-  async function toggleSuspend(id: string, currentActive: boolean, name: string) {
-    const { error } = await supabase
-      .from('profiles')
-      .update({ is_active: !currentActive })
-      .eq('id', id)
-    if (error) { toast.error('Failed'); return }
-    setProviders(prev => prev.map(p =>
-      p.id === id ? { ...p, is_active: !currentActive, profile: { ...p.profile, is_active: !currentActive } } : p
-    ))
-    toast.success(`${name} ${!currentActive ? 'reactivated' : 'suspended'}`)
-  }
-
-  function previewAsProvider() {
-    setViewAsRole('provider')
-    navigate('/provider')
-    toast('Previewing Provider dashboard', { icon: '👁️' })
-  }
-
-  const counts = {
-    total:    providers.length,
-    verified: providers.filter(p => p.kyc_status === 'verified').length,
-    pending:  providers.filter(p => ['pending', 'submitted'].includes(p.kyc_status)).length,
-    online:   providers.filter(p => p.is_online).length,
-  }
-
   return (
-    <div>
-      <PageHeader
-        title="Provider Management"
-        subtitle={`${providers.length} total providers`}
-        action={
-          <div style={{ display:'flex', gap:8 }}>
-            <button className="btn btn-outline btn-sm" onClick={previewAsProvider}>👁️ View as Provider</button>
-            <button className="btn btn-outline btn-sm" onClick={load}>↻ Refresh</button>
-          </div>
-        }
-      />
-      <div className="page-content">
+    <div className="min-h-screen bg-slate-50 dark:bg-navy-950 pb-24 lg:pb-12">
+      <HeaderBar title="Service Provider Directory" subtitle="Manage partner profiles, skills, and KYC status" showLocation={false} />
 
-        {/* Summary cards */}
-        <div style={{ display:'grid', gridTemplateColumns:'repeat(4,1fr)', gap:14, marginBottom:20 }}>
-          {[
-            ['Total',    counts.total,    'var(--text)'],
-            ['Verified', counts.verified, '#16a34a'],
-            ['Pending',  counts.pending,  '#d97706'],
-            ['Online',   counts.online,   '#f97316'],
-          ].map(([l, v, c], i) => (
-            <div key={i} className="glass" style={{ padding:'14px 18px', display:'flex', justifyContent:'space-between', alignItems:'center' }}>
-              <span style={{ fontSize:13, color:'var(--text2)' }}>{l}</span>
-              <span style={{ fontSize:22, fontWeight:800, color:c as string, fontFamily:'Plus Jakarta Sans,sans-serif' }}>{v}</span>
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 pt-5 space-y-5">
+        {/* Controls */}
+        <div className="p-4 bg-white dark:bg-navy-900 rounded-3xl border border-slate-200/80 dark:border-navy-800 shadow-card flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div className="relative flex-1">
+            <Search className="w-4 h-4 absolute left-3.5 top-3 text-slate-400" />
+            <input
+              type="text"
+              placeholder="Search providers by name, trade, skills, or district..."
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+              className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-slate-200 dark:border-navy-700 bg-slate-50 dark:bg-navy-800 text-xs text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-brand-500"
+            />
+          </div>
+
+          <div className="flex items-center gap-2">
+            <div className="flex bg-slate-100 dark:bg-navy-800 p-1 rounded-xl text-xs font-semibold">
+              {[
+                { id: 'all', label: 'All' },
+                { id: 'verified', label: 'Verified' },
+                { id: 'pending', label: 'Pending' },
+                { id: 'rejected', label: 'Rejected' },
+              ].map(t => (
+                <button
+                  key={t.id}
+                  type="button"
+                  onClick={() => setKycFilter(t.id as any)}
+                  className={`px-3 py-1.5 rounded-lg transition-all ${
+                    kycFilter === t.id
+                      ? 'bg-brand-500 text-white shadow-sm font-bold'
+                      : 'text-slate-600 dark:text-slate-400'
+                  }`}
+                >
+                  {t.label}
+                </button>
+              ))}
             </div>
-          ))}
+
+            <button
+              type="button"
+              onClick={fetchProviders}
+              className="p-2.5 rounded-xl border border-slate-200 dark:border-navy-700 hover:bg-slate-100 dark:hover:bg-navy-800 text-slate-700 dark:text-slate-300 transition-colors"
+            >
+              <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
+            </button>
+          </div>
         </div>
 
-        {/* Filters */}
-        <div style={{ display:'flex', gap:12, marginBottom:18, flexWrap:'wrap' }}>
-          <div className="search-wrapper" style={{ flex:1, minWidth:200 }}>
-            <span className="search-icon" style={{ fontSize:13 }}>🔍</span>
-            <input className="input search-input" placeholder="Search by name or district..."
-              value={search} onChange={e => setSearch(e.target.value)} />
-          </div>
-          <div className="tab-bar">
-            {[['all','All'],['pending','Pending'],['submitted','Submitted'],['verified','Verified'],['rejected','Rejected']].map(([v, l]) => (
-              <button key={v} className={`tab-item ${kycFilter===v?'active':''}`} onClick={() => setKycFilter(v)}>{l}</button>
+        {/* Providers Grid */}
+        {loading ? (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {[1, 2, 3, 4].map(i => (
+              <div key={i} className="p-5 rounded-3xl bg-white dark:bg-navy-900 border border-slate-200 dark:border-navy-800 animate-pulse space-y-3">
+                <div className="h-4 bg-slate-200 dark:bg-navy-700 rounded w-1/3" />
+                <div className="h-3 bg-slate-200 dark:bg-navy-700 rounded w-2/3" />
+              </div>
             ))}
           </div>
-        </div>
-
-        <div className="glass" style={{ overflow:'hidden' }}>
-          {loading ? (
-            <div style={{ padding:48, textAlign:'center', color:'var(--text3)' }}>Loading providers...</div>
-          ) : filtered.length === 0 ? (
-            <div style={{ padding:48, textAlign:'center', color:'var(--text3)' }}>
-              <p style={{ fontSize:36, marginBottom:10 }}>👷</p>
-              <p>No providers found.</p>
-              <p style={{ fontSize:12, marginTop:6 }}>Register provider accounts to see them here.</p>
+        ) : filtered.length === 0 ? (
+          <div className="p-12 text-center bg-white dark:bg-navy-900 rounded-3xl border border-slate-200 dark:border-navy-800 shadow-subtle space-y-3">
+            <div className="w-14 h-14 rounded-2xl bg-brand-500/10 text-brand-500 flex items-center justify-center mx-auto text-xl">
+              👷
             </div>
-          ) : (
-            <table className="data-table">
-              <thead>
-                <tr>
-                  <th>Provider</th>
-                  <th>Service</th>
-                  <th>District</th>
-                  <th>Rate</th>
-                  <th>Jobs</th>
-                  <th>KYC</th>
-                  <th>Online</th>
-                  <th>Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {filtered.map((p: any) => {
-                  const name     = p.full_name ?? 'Provider'
-                  const isActive = p.is_active !== false
-                  return (
-                    <tr key={p.id}>
-                      <td>
-                        <div style={{ display:'flex', alignItems:'center', gap:10 }}>
-                          <Avatar name={name} size={32} />
-                          <div>
-                            <p style={{ fontWeight:600, fontSize:13 }}>{name}</p>
-                            <p style={{ fontSize:10, color:'var(--text3)' }}>{p.phone ?? '—'}</p>
-                          </div>
-                        </div>
-                      </td>
-                      <td style={{ fontSize:13 }}>
-                        {p.category
-                          ? <span>{p.category.icon} {p.category.name}</span>
-                          : <span style={{ color:'var(--text3)', fontSize:11, fontStyle:'italic' }}>Not set</span>}
-                      </td>
-                      <td style={{ color:'var(--text2)', fontSize:12 }}>{p.district ?? '—'}</td>
-                      <td style={{ fontWeight:600 }}>
-                        {p.hourly_rate > 0 ? `₹${p.hourly_rate}/hr` : <span style={{ color:'var(--text3)' }}>—</span>}
-                      </td>
-                      <td style={{ fontWeight:600 }}>{p.total_jobs ?? 0}</td>
-                      <td>
-                        {/* KYC badge — reflects live state from our merged data */}
-                        <StatusBadge status={p.kyc_status ?? 'pending'} />
-                      </td>
-                      <td>
-                        {p.is_online
-                          ? <div style={{ display:'flex', alignItems:'center', gap:4 }}>
-                              <div className="live-dot" style={{ width:6, height:6 }} />
-                              <span style={{ fontSize:11, color:'#16a34a', fontWeight:600 }}>Online</span>
-                            </div>
-                          : <span style={{ fontSize:11, color:'var(--text3)' }}>Offline</span>}
-                        {!isActive && <span className="badge badge-red" style={{ fontSize:9, display:'block', marginTop:2 }}>Suspended</span>}
-                      </td>
-                      <td>
-                        <div style={{ display:'flex', gap:5, flexWrap:'wrap' }}>
-                          {/* Show approve/reject based on CURRENT live kyc_status */}
-                          {(p.kyc_status === 'pending' || p.kyc_status === 'submitted') && (
-                            <>
-                              <button className="btn btn-success btn-sm" onClick={() => approve(p.id, name)}>Approve</button>
-                              <button className="btn btn-danger btn-sm"  onClick={() => reject(p.id, name)}>Reject</button>
-                            </>
-                          )}
-                          {p.kyc_status === 'verified' && (
-                            <button className="btn btn-danger btn-sm" onClick={() => reject(p.id, name)}>Revoke</button>
-                          )}
-                          {p.kyc_status === 'rejected' && (
-                            <button className="btn btn-success btn-sm" onClick={() => approve(p.id, name)}>Re-Approve</button>
-                          )}
-                          <button
-                            className={isActive ? 'btn btn-outline btn-sm' : 'btn btn-success btn-sm'}
-                            onClick={() => toggleSuspend(p.id, isActive, name)}
-                          >
-                            {isActive ? 'Suspend' : 'Restore'}
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  )
-                })}
-              </tbody>
-            </table>
-          )}
-        </div>
-      </div>
+            <h3 className="font-bold text-base text-slate-900 dark:text-white">No Providers Found</h3>
+            <p className="text-xs text-slate-400 max-w-sm mx-auto">
+              No service partners matched your filter criteria.
+            </p>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {filtered.map(prov => (
+              <div
+                key={prov.id}
+                className="p-5 rounded-3xl bg-white dark:bg-navy-900 border border-slate-200/80 dark:border-navy-800 shadow-card space-y-4"
+              >
+                <div className="flex items-start justify-between gap-3">
+                  <div className="flex items-center gap-3">
+                    <div className="w-12 h-12 rounded-2xl bg-brand-500/10 border border-brand-500/30 text-brand-500 flex items-center justify-center text-xl font-bold flex-shrink-0">
+                      👷
+                    </div>
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <h4 className="font-bold text-sm text-slate-900 dark:text-white">
+                          {prov.profile?.full_name || 'Verified Provider'}
+                        </h4>
+                        <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                          prov.kyc_status === 'verified'
+                            ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20'
+                            : 'bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20'
+                        }`}>
+                          {prov.kyc_status === 'verified' ? 'KYC Verified' : 'KYC Pending'}
+                        </span>
+                      </div>
+                      <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                        {prov.bio || 'General Technician'} • {prov.experience_years} Years Experience
+                      </p>
+                    </div>
+                  </div>
+
+                  <span className="text-xs font-bold text-brand-600 dark:text-brand-400 flex items-center gap-1">
+                    <Star className="w-3.5 h-3.5 fill-amber-400 text-amber-400" />
+                    {prov.rating} ({prov.total_jobs} jobs)
+                  </span>
+                </div>
+
+                {/* Details Bar */}
+                <div className="grid grid-cols-3 gap-2 p-2.5 rounded-2xl bg-slate-50 dark:bg-navy-800/60 border border-slate-200/60 dark:border-navy-700/60 text-xs text-slate-600 dark:text-slate-300">
+                  <div>
+                    <span className="text-[10px] text-slate-400 block">District</span>
+                    <span className="font-bold text-slate-800 dark:text-slate-200 truncate block">
+                      {prov.profile?.district || 'Karnataka'}
+                    </span>
+                  </div>
+                  <div>
+                    <span className="text-[10px] text-slate-400 block">Phone</span>
+                    <span className="font-mono font-bold text-slate-800 dark:text-slate-200 truncate block">
+                      {prov.profile?.phone || '+91 98450 00000'}
+                    </span>
+                  </div>
+                  <div>
+                    <span className="text-[10px] text-slate-400 block">Rate / Unit</span>
+                    <span className="font-bold text-brand-600 dark:text-brand-400">
+                      ₹{prov.hourly_rate || 250}/hr
+                    </span>
+                  </div>
+                </div>
+
+                {/* Skills tags */}
+                {prov.skills_tags && prov.skills_tags.length > 0 && (
+                  <div className="flex flex-wrap gap-1.5">
+                    {prov.skills_tags.map(tag => (
+                      <span
+                        key={tag}
+                        className="text-[10px] px-2 py-0.5 rounded-lg bg-slate-100 dark:bg-navy-800 text-slate-600 dark:text-slate-300 font-medium"
+                      >
+                        {tag}
+                      </span>
+                    ))}
+                  </div>
+                )}
+
+                {/* Admin Actions */}
+                <div className="pt-2 border-t border-slate-100 dark:border-navy-800 flex items-center justify-end gap-2">
+                  {prov.kyc_status !== 'verified' && (
+                    <button
+                      type="button"
+                      onClick={() => handleVerify(prov.id)}
+                      className="px-3.5 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs shadow-sm flex items-center gap-1 transition-colors"
+                    >
+                      <CheckCircle2 className="w-3.5 h-3.5" />
+                      <span>Approve KYC</span>
+                    </button>
+                  )}
+                  {prov.kyc_status !== 'rejected' && (
+                    <button
+                      type="button"
+                      onClick={() => handleReject(prov.id)}
+                      className="px-3.5 py-1.5 rounded-xl bg-red-500/10 text-red-600 dark:text-red-400 hover:bg-red-500/20 font-bold text-xs border border-red-500/20 transition-colors"
+                    >
+                      Reject
+                    </button>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </main>
     </div>
   )
 }

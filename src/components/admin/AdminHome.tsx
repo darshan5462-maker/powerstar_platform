@@ -1,151 +1,260 @@
+import React, { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import StatCard from '@/components/ui/StatCard'
-import PageHeader from '@/components/layout/PageHeader'
-import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, CartesianGrid } from 'recharts'
-
-const MONTHLY = [
-  {m:'Jan',r:3.2},{m:'Feb',r:4.1},{m:'Mar',r:3.8},{m:'Apr',r:5.2},
-  {m:'May',r:6.4},{m:'Jun',r:7.8},{m:'Jul',r:8.1},{m:'Aug',r:7.2},
-  {m:'Sep',r:8.4},{m:'Oct',r:9.2},
-]
-const PIE_DATA = [
-  {name:'Manpower',value:62,color:'#f97316'},
-  {name:'Vehicles', value:24,color:'#2563eb'},
-  {name:'RTO',      value:9, color:'#16a34a'},
-  {name:'Financial',value:5, color:'#d97706'},
-]
-const LIVE_FEED = [
-  'Ramesh K. booked Electrician · Koramangala',
-  'Tata Ace confirmed for shifting · Mysuru',
-  'Suresh P. completed Plumbing ★★★★★',
-  'JCB booked · Mangaluru construction site',
-  'New provider KYC submitted · Mahesh R.',
-  '₹2,100 settled to Mason · Davangere',
-  'Dispute #3 resolved — refund issued',
-]
+import {
+  Users,
+  Calendar,
+  DollarSign,
+  ShieldCheck,
+  TrendingUp,
+  AlertCircle,
+  Clock,
+  CheckCircle2,
+  Zap,
+  ArrowRight,
+  Activity,
+  MapPin,
+  ChevronRight
+} from 'lucide-react'
+import { getAllBookingsAdmin, getVerifiedProvidersList } from '@/services/api'
+import { Booking, ProviderProfile } from '@/types'
+import { StatusBadge } from '@/components/ui/Badge'
+import HeaderBar from '@/components/layout/HeaderBar'
 
 export default function AdminHome() {
   const nav = useNavigate()
+  const [bookings, setBookings] = useState<Booking[]>([])
+  const [providers, setProviders] = useState<ProviderProfile[]>([])
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    const fetchData = async () => {
+      setLoading(true)
+      const [bData, pData] = await Promise.all([
+        getAllBookingsAdmin(),
+        getVerifiedProvidersList()
+      ])
+      setBookings(bData)
+      setProviders(pData)
+      setLoading(false)
+    }
+    fetchData()
+  }, [])
+
+  const pendingAssignment = bookings.filter(b => b.status === 'pending_admin')
+  const providerAssigned = bookings.filter(b => b.status === 'provider_assigned')
+  const paymentPending = bookings.filter(b => b.status === 'payment_pending')
+  const confirmed = bookings.filter(b => b.status === 'confirmed' || b.status === 'in_progress')
+  const completed = bookings.filter(b => b.status === 'completed')
+
+  const totalRevenue = completed.reduce((acc, b) => acc + (b.total_amount || 0), 0)
+  const totalPlatformFees = completed.reduce((acc, b) => acc + (b.platform_fee || Math.round((b.total_amount || 0) * 0.05)), 0)
+
   return (
-    <div>
-      <PageHeader
-        title="Admin Dashboard"
-        subtitle="Platform overview — All 31 Karnataka Districts"
-        action={<div style={{display:'flex',alignItems:'center',gap:6,fontSize:12,color:'var(--text2)'}}><div className="live-dot" style={{width:6,height:6}} /> Live · updates every 30s</div>}
-      />
-      <div className="page-content">
+    <div className="min-h-screen bg-slate-50 dark:bg-navy-950 pb-24 lg:pb-12">
+      <HeaderBar title="Admin Command Center" subtitle="Real-time dispatch, booking assignment & platform metrics" showLocation={false} />
 
-        {/* Primary stats */}
-        <div className="grid-to-scroll" style={{ gridTemplateColumns:'repeat(4,1fr)', marginBottom:24 }}>
-          <StatCard icon="📋" iconBg="rgba(249,115,22,0.1)" label="Total Bookings"    value="1,284"  change="127 today" up onClick={()=>nav('/admin/bookings')} />
-          <StatCard icon="💰" iconBg="rgba(22,163,74,0.1)"  label="Revenue (MTD)"     value="₹9.2L"  change="22% vs last month" up onClick={()=>nav('/admin/payments')} />
-          <StatCard icon="👷" iconBg="rgba(37,99,235,0.1)"  label="Active Providers"  value="4,218"  change="847 online now" up onClick={()=>nav('/admin/providers')} />
-          <StatCard icon="👥" iconBg="rgba(217,119,6,0.1)"  label="Customers"         value="28,400" change="1,200 this week" up />
-        </div>
-
-        {/* Charts row */}
-        <div className="responsive-grid" style={{ marginBottom:20 }}>
-          <div className="glass" style={{padding:22}}>
-            <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:20}}>
-              <h3 style={{fontWeight:700,fontSize:15}}>Monthly Revenue</h3>
-              <span className="badge badge-green">↑ 22% vs last month</span>
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 pt-5 space-y-6">
+        {/* ── 1. ALERT BANNER: UNASSIGNED BOOKINGS ── */}
+        {pendingAssignment.length > 0 && (
+          <div className="p-4 sm:p-5 rounded-3xl bg-amber-500/10 border border-amber-500/30 flex flex-col sm:flex-row sm:items-center justify-between gap-4 shadow-sm">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-2xl bg-amber-500 text-white flex items-center justify-center font-bold text-lg shadow-brand flex-shrink-0 animate-pulse">
+                ⚡
+              </div>
+              <div>
+                <h3 className="font-extrabold text-sm text-slate-900 dark:text-white flex items-center gap-2">
+                  <span>{pendingAssignment.length} Booking{pendingAssignment.length > 1 ? 's' : ''} Awaiting Provider Assignment</span>
+                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-500 text-white uppercase">
+                    Action Required
+                  </span>
+                </h3>
+                <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                  Customers are waiting for technician dispatch in {pendingAssignment.map(b => b.district).slice(0, 3).join(', ')}.
+                </p>
+              </div>
             </div>
-            <ResponsiveContainer width="100%" height={170}>
-              <BarChart data={MONTHLY} barSize={26}>
-                <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" vertical={false} />
-                <XAxis dataKey="m" tick={{fill:'var(--text2)',fontSize:11}} axisLine={false} tickLine={false} />
-                <YAxis hide />
-                <Tooltip contentStyle={{background:'var(--card)',border:'1px solid var(--border)',borderRadius:10,fontFamily:'Inter,sans-serif',fontSize:12}} formatter={(v:number)=>['₹'+v+'L','Revenue']} />
-                <Bar dataKey="r" fill="#f97316" radius={[5,5,0,0]} opacity={0.9} />
-              </BarChart>
-            </ResponsiveContainer>
+
+            <button
+              type="button"
+              onClick={() => nav('/admin/bookings?filter=pending_admin')}
+              className="px-5 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-600 text-white font-bold text-xs shadow-brand flex items-center justify-center gap-1.5 flex-shrink-0"
+            >
+              <span>Assign Providers Now</span>
+              <ArrowRight className="w-3.5 h-3.5" />
+            </button>
+          </div>
+        )}
+
+        {/* ── 2. METRICS STAT CARDS ── */}
+        <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+          <div className="p-5 rounded-3xl bg-white dark:bg-navy-900 border border-slate-200/80 dark:border-navy-800 shadow-card">
+            <div className="flex items-center justify-between mb-3">
+              <span className="text-xs font-semibold text-slate-400">Total Bookings</span>
+              <div className="w-8 h-8 rounded-xl bg-brand-500/10 text-brand-500 flex items-center justify-center">
+                <Calendar className="w-4 h-4" />
+              </div>
+            </div>
+            <p className="text-2xl sm:text-3xl font-black text-slate-900 dark:text-white">
+              {bookings.length}
+            </p>
+            <p className="text-[11px] text-slate-400 mt-1">Across 31 Districts</p>
           </div>
 
-          <div className="glass" style={{padding:22}}>
-            <h3 style={{fontWeight:700,fontSize:15,marginBottom:16}}>Bookings by Category</h3>
-            <ResponsiveContainer width="100%" height={110}>
-              <PieChart>
-                <Pie data={PIE_DATA} cx="50%" cy="50%" innerRadius={30} outerRadius={50} dataKey="value" stroke="none">
-                  {PIE_DATA.map((e,i)=><Cell key={i} fill={e.color} />)}
-                </Pie>
-                <Tooltip contentStyle={{background:'var(--card)',border:'1px solid var(--border)',borderRadius:10,fontSize:12}} formatter={(v:number)=>[v+'%','']} />
-              </PieChart>
-            </ResponsiveContainer>
-            <div style={{display:'flex',flexDirection:'column',gap:8,marginTop:8}}>
-              {PIE_DATA.map((d,i)=>(
-                <div key={i} style={{display:'flex',justifyContent:'space-between',alignItems:'center',fontSize:12}}>
-                  <div style={{display:'flex',alignItems:'center',gap:8}}>
-                    <div style={{width:8,height:8,borderRadius:'50%',background:d.color,flexShrink:0}} />
-                    <span style={{color:'var(--text2)'}}>{d.name}</span>
+          <div className="p-5 rounded-3xl bg-white dark:bg-navy-900 border border-amber-500/40 shadow-card">
+            <div className="flex items-center justify-between mb-3">
+              <span className="text-xs font-semibold text-amber-600 dark:text-amber-400">Pending Assignment</span>
+              <div className="w-8 h-8 rounded-xl bg-amber-500/10 text-amber-500 flex items-center justify-center font-bold">
+                ⏳
+              </div>
+            </div>
+            <p className="text-2xl sm:text-3xl font-black text-amber-600 dark:text-amber-400">
+              {pendingAssignment.length}
+            </p>
+            <p className="text-[11px] text-amber-600/70 dark:text-amber-400/70 mt-1">Needs admin match</p>
+          </div>
+
+          <div className="p-5 rounded-3xl bg-white dark:bg-navy-900 border border-slate-200/80 dark:border-navy-800 shadow-card">
+            <div className="flex items-center justify-between mb-3">
+              <span className="text-xs font-semibold text-slate-400">Active / In-Progress</span>
+              <div className="w-8 h-8 rounded-xl bg-blue-500/10 text-blue-500 flex items-center justify-center">
+                <Activity className="w-4 h-4" />
+              </div>
+            </div>
+            <p className="text-2xl sm:text-3xl font-black text-blue-600 dark:text-blue-400">
+              {confirmed.length + providerAssigned.length}
+            </p>
+            <p className="text-[11px] text-slate-400 mt-1">Assigned & active</p>
+          </div>
+
+          <div className="p-5 rounded-3xl bg-white dark:bg-navy-900 border border-slate-200/80 dark:border-navy-800 shadow-card">
+            <div className="flex items-center justify-between mb-3">
+              <span className="text-xs font-semibold text-slate-400">Gross Volume (UPI)</span>
+              <div className="w-8 h-8 rounded-xl bg-emerald-500/10 text-emerald-500 flex items-center justify-center">
+                <DollarSign className="w-4 h-4" />
+              </div>
+            </div>
+            <p className="text-2xl sm:text-3xl font-black text-emerald-600 dark:text-emerald-400">
+              ₹{totalRevenue.toLocaleString('en-IN')}
+            </p>
+            <p className="text-[11px] text-slate-400 mt-1">Platform Fee: ₹{totalPlatformFees}</p>
+          </div>
+        </div>
+
+        {/* ── 3. QUICK ASSIGNMENT WORKFLOW QUEUE ── */}
+        <div className="p-6 rounded-3xl bg-white dark:bg-navy-900 border border-slate-200/80 dark:border-navy-800 shadow-card space-y-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <h3 className="font-extrabold text-base text-slate-900 dark:text-white">
+                Dispatch Queue ({pendingAssignment.length} Unassigned)
+              </h3>
+              <p className="text-xs text-slate-500 dark:text-slate-400">
+                Admin controls technician selection for all customer requests
+              </p>
+            </div>
+
+            <button
+              type="button"
+              onClick={() => nav('/admin/bookings')}
+              className="text-xs font-bold text-brand-500 hover:text-brand-600 flex items-center gap-1"
+            >
+              <span>View All</span>
+              <ChevronRight className="w-4 h-4" />
+            </button>
+          </div>
+
+          {pendingAssignment.length === 0 ? (
+            <div className="p-8 text-center bg-slate-50 dark:bg-navy-800/50 rounded-2xl border border-slate-200 dark:border-navy-700/60 text-xs text-slate-500">
+              <CheckCircle2 className="w-8 h-8 text-emerald-500 mx-auto mb-2" />
+              <p className="font-bold text-slate-900 dark:text-white">All Bookings Assigned!</p>
+              <p className="text-slate-400 mt-0.5">No pending customer requests right now.</p>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {pendingAssignment.slice(0, 3).map(bk => (
+                <div
+                  key={bk.id}
+                  className="p-4 rounded-2xl bg-slate-50 dark:bg-navy-800/80 border border-slate-200 dark:border-navy-700 flex flex-col sm:flex-row sm:items-center justify-between gap-3"
+                >
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-xl bg-brand-500/10 text-brand-500 flex items-center justify-center text-xl flex-shrink-0">
+                      {bk.category?.icon || '⚡'}
+                    </div>
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <h4 className="font-bold text-xs text-slate-900 dark:text-white">
+                          {bk.category?.name || 'Service'}
+                        </h4>
+                        <span className="font-mono text-[10px] text-slate-400">#{bk.booking_ref}</span>
+                      </div>
+                      <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                        Customer: {bk.customer?.full_name || 'Customer'} • 📍 {bk.district} ({bk.city})
+                      </p>
+                    </div>
                   </div>
-                  <span style={{fontWeight:700,color:d.color}}>{d.value}%</span>
+
+                  <div className="flex items-center gap-3 justify-between sm:justify-end">
+                    <span className="font-extrabold text-xs text-brand-600 dark:text-brand-400">
+                      ₹{bk.total_amount}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => nav(`/admin/bookings?assign=${bk.id}`)}
+                      className="px-4 py-2 rounded-xl bg-brand-500 hover:bg-brand-600 text-white font-bold text-xs shadow-brand flex items-center gap-1.5 transition-colors"
+                    >
+                      <Users className="w-3.5 h-3.5" />
+                      <span>Assign Provider</span>
+                    </button>
+                  </div>
                 </div>
               ))}
             </div>
-          </div>
+          )}
         </div>
 
-        {/* Secondary stats */}
-        <div className="grid-to-scroll" style={{ gridTemplateColumns:'repeat(4,1fr)', marginBottom:20 }}>
-          <div className="glass" style={{padding:16,cursor:'pointer'}} onClick={()=>nav('/admin/disputes')}>
-            <div style={{display:'flex',gap:12,alignItems:'center'}}>
-              <div style={{fontSize:24}}>⚠️</div>
-              <div>
-                <p style={{fontSize:12,color:'var(--text2)'}}>Open Disputes</p>
-                <p style={{fontSize:22,fontWeight:800,color:'#dc2626',fontFamily:'Plus Jakarta Sans,sans-serif'}}>3</p>
-                <p style={{fontSize:11,color:'#dc2626',fontWeight:600}}>Needs action</p>
-              </div>
-            </div>
-          </div>
-          <div className="glass" style={{padding:16,cursor:'pointer'}} onClick={()=>nav('/admin/kyc')}>
-            <div style={{display:'flex',gap:12,alignItems:'center'}}>
-              <div style={{fontSize:24}}>🔐</div>
-              <div>
-                <p style={{fontSize:12,color:'var(--text2)'}}>KYC Pending</p>
-                <p style={{fontSize:22,fontWeight:800,color:'#d97706',fontFamily:'Plus Jakarta Sans,sans-serif'}}>12</p>
-                <p style={{fontSize:11,color:'#d97706',fontWeight:600}}>Awaiting review</p>
-              </div>
-            </div>
-          </div>
-          <div className="glass" style={{padding:16}}>
-            <div style={{display:'flex',gap:12,alignItems:'center'}}>
-              <div style={{fontSize:24}}>⭐</div>
-              <div>
-                <p style={{fontSize:12,color:'var(--text2)'}}>Platform Rating</p>
-                <p style={{fontSize:22,fontWeight:800,fontFamily:'Plus Jakarta Sans,sans-serif'}}>4.8</p>
-                <p style={{fontSize:11,color:'#16a34a',fontWeight:600}}>↑ vs 4.6 last month</p>
-              </div>
-            </div>
-          </div>
-          <div className="glass" style={{padding:16}}>
-            <div style={{display:'flex',gap:12,alignItems:'center'}}>
-              <div style={{fontSize:24}}>⚡</div>
-              <div>
-                <p style={{fontSize:12,color:'var(--text2)'}}>Avg. Response</p>
-                <p style={{fontSize:22,fontWeight:800,fontFamily:'Plus Jakarta Sans,sans-serif'}}>2.8m</p>
-                <p style={{fontSize:11,color:'var(--text2)'}}>Provider acceptance</p>
-              </div>
-            </div>
-          </div>
-        </div>
+        {/* ── 4. RECENT ACTIVITY LOG ── */}
+        <div className="p-6 rounded-3xl bg-white dark:bg-navy-900 border border-slate-200/80 dark:border-navy-800 shadow-card space-y-4">
+          <h3 className="font-extrabold text-base text-slate-900 dark:text-white">
+            Recent Platform Bookings
+          </h3>
 
-        {/* Live feed */}
-        <div className="glass" style={{padding:20}}>
-          <div style={{display:'flex',alignItems:'center',gap:8,marginBottom:14}}>
-            <h3 style={{fontWeight:700,fontSize:15}}>Live Platform Activity</h3>
-            <div className="live-dot" style={{width:6,height:6}} />
-          </div>
-          <div style={{display:'flex',flexDirection:'column',gap:6}}>
-            {LIVE_FEED.map((item,i)=>(
-              <div key={i} style={{display:'flex',alignItems:'center',gap:10,background:'var(--bg2)',borderRadius:8,padding:'9px 14px',fontSize:13}}>
-                <div style={{width:6,height:6,borderRadius:'50%',background:'#16a34a',flexShrink:0}} />
-                <span style={{flex:1,color:'var(--text2)'}}>{item}</span>
-                <span style={{fontSize:11,color:'var(--text3)',flexShrink:0}}>{(i+1)*2}m ago</span>
-              </div>
-            ))}
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-xs">
+              <thead>
+                <tr className="border-b border-slate-100 dark:border-navy-800 text-slate-400 font-semibold uppercase text-[10px]">
+                  <th className="pb-3">Booking ID</th>
+                  <th className="pb-3">Customer</th>
+                  <th className="pb-3">Service</th>
+                  <th className="pb-3">District</th>
+                  <th className="pb-3">Amount</th>
+                  <th className="pb-3">Provider</th>
+                  <th className="pb-3">Status</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100 dark:divide-navy-800">
+                {bookings.slice(0, 6).map(bk => (
+                  <tr key={bk.id} className="hover:bg-slate-50 dark:hover:bg-navy-800/50 transition-colors">
+                    <td className="py-3 font-mono font-bold text-slate-900 dark:text-white">#{bk.booking_ref}</td>
+                    <td className="py-3 font-medium text-slate-700 dark:text-slate-300">{bk.customer?.full_name || 'Customer'}</td>
+                    <td className="py-3 text-slate-800 dark:text-slate-200">{bk.category?.name || 'Service'}</td>
+                    <td className="py-3 text-slate-500 dark:text-slate-400">{bk.district}</td>
+                    <td className="py-3 font-bold text-brand-600 dark:text-brand-400">₹{bk.total_amount}</td>
+                    <td className="py-3 text-slate-600 dark:text-slate-300">
+                      {bk.provider?.full_name ? (
+                        <span className="text-emerald-600 dark:text-emerald-400 font-semibold">{bk.provider.full_name}</span>
+                      ) : (
+                        <span className="text-amber-500 font-medium">Unassigned</span>
+                      )}
+                    </td>
+                    <td className="py-3">
+                      <StatusBadge status={bk.status} />
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
         </div>
-      </div>
+      </main>
     </div>
   )
 }

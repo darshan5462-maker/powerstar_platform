@@ -7,14 +7,22 @@ export async function signIn(email: string, password: string) {
   return data
 }
 
-export async function signUp(params: { email:string; password:string; full_name:string; phone:string; role:Role; district:string }) {
+export async function signUp(params: { email: string; password: string; full_name: string; phone: string; role: Role; district: string }) {
   const { data, error } = await supabase.auth.signUp({
-    email: params.email, password: params.password,
-    options: { data: { full_name:params.full_name, role:params.role, phone:params.phone, district:params.district } }
+    email: params.email,
+    password: params.password,
+    options: { data: { full_name: params.full_name, role: params.role, phone: params.phone, district: params.district } }
   })
   if (error) throw error
   if (data.user) {
-    await supabase.from('profiles').upsert({ id:data.user.id, full_name:params.full_name, role:params.role, phone:params.phone, district:params.district, is_active:true })
+    await supabase.from('profiles').upsert({
+      id: data.user.id,
+      full_name: params.full_name,
+      role: params.role,
+      phone: params.phone,
+      district: params.district,
+      is_active: true
+    })
   }
   return data
 }
@@ -34,4 +42,12 @@ export async function updateProfile(userId: string, updates: Record<string, unkn
   const { data, error } = await supabase.from('profiles').update(updates).eq('id', userId).select().single()
   if (error) throw error
   return data
+}
+
+export const authService = {
+  signIn,
+  signUp,
+  signOut,
+  fetchProfile,
+  updateProfile
 }

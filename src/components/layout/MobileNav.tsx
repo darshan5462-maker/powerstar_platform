@@ -1,174 +1,163 @@
-// Bottom mobile navigation bar — shown only on small screens
-// Add this inside CustomerDashboard.tsx and ProviderDashboard.tsx
-
+import React, { useEffect, useState } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
-import { useEffect, useState } from 'react'
+import {
+  Home,
+  Grid,
+  Calendar,
+  Activity,
+  User,
+  Briefcase,
+  DollarSign,
+  FileCheck,
+  LayoutDashboard,
+  Users,
+  ShieldCheck,
+  Settings
+} from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import { useAuthStore } from '@/store/authStore'
 
-interface NavTab {
-  icon:   string
-  label:  string
-  path:   string
+interface TabItem {
+  id: string
+  label: string
+  path: string
+  icon: React.ComponentType<{ className?: string }>
   badge?: number
 }
 
+// ── CUSTOMER MOBILE BOTTOM NAVIGATION ──
 export function CustomerMobileNav() {
-  const nav      = useNavigate()
-  const location = useLocation()
   const { profile } = useAuthStore()
-  const [activeBookings, setActiveBookings] = useState(0)
-  const [notifications,  setNotifications]  = useState(0)
+  const location = useLocation()
+  const [activeCount, setActiveCount] = useState(0)
 
   useEffect(() => {
     if (!profile?.id) return
-    // Count active bookings
-    supabase.from('bookings').select('id', { count:'exact' })
-      .eq('customer_id', profile.id).in('status', ['pending_admin','provider_assigned','payment_pending','payment_success','confirmed','in_progress'])
-      .then(({ count }) => setActiveBookings(count ?? 0))
-    // Count unread notifications
-    supabase.from('notifications').select('id', { count:'exact' })
-      .eq('user_id', profile.id).eq('is_read', false)
-      .then(({ count }) => setNotifications(count ?? 0))
+    const fetchCounts = async () => {
+      try {
+        const { count } = await supabase
+          .from('bookings')
+          .select('id', { count: 'exact', head: true })
+          .eq('customer_id', profile.id)
+          .in('status', ['pending_admin', 'provider_assigned', 'payment_pending', 'confirmed', 'in_progress'])
+
+        setActiveCount(count || 0)
+      } catch (e) {
+        // ignore
+      }
+    }
+    fetchCounts()
   }, [profile?.id, location.pathname])
 
-  const tabs: NavTab[] = [
-    { icon:'🏠', label:'Home',     path:'/dashboard' },
-    { icon:'➕', label:'Book',     path:'/dashboard/book' },
-    { icon:'📍', label:'Track',    path:'/dashboard/track',    badge: activeBookings > 0 ? activeBookings : undefined },
-    { icon:'📋', label:'Bookings', path:'/dashboard/bookings' },
-    { icon:'☰', label:'Menu',     path:'/dashboard/profile',  badge: notifications > 0 ? notifications : undefined },
+  const tabs: TabItem[] = [
+    { id: 'home', label: 'Home', path: '/dashboard', icon: Home },
+    { id: 'services', label: 'Services', path: '/dashboard/book', icon: Grid },
+    { id: 'bookings', label: 'Bookings', path: '/dashboard/bookings', icon: Calendar },
+    { id: 'track', label: 'Track', path: '/dashboard/track', icon: Activity, badge: activeCount > 0 ? activeCount : undefined },
+    { id: 'profile', label: 'Profile', path: '/dashboard/profile', icon: User },
   ]
 
-  return <MobileNavBar tabs={tabs} />
+  return <BottomTabBar tabs={tabs} />
 }
 
+// ── PROVIDER MOBILE BOTTOM NAVIGATION ──
 export function ProviderMobileNav() {
-  const nav      = useNavigate()
-  const location = useLocation()
   const { profile } = useAuthStore()
-  const [requests,      setRequests]      = useState(0)
-  const [notifications, setNotifications] = useState(0)
+  const location = useLocation()
+  const [assignedCount, setAssignedCount] = useState(0)
 
   useEffect(() => {
-    if (!profile?.id || !profile?.district) return
-    supabase.from('bookings').select('id', { count:'exact' })
-      .eq('status', 'provider_assigned').eq('provider_id', profile.id)
-      .then(({ count }) => setRequests(count ?? 0))
-    supabase.from('notifications').select('id', { count:'exact' })
-      .eq('user_id', profile.id).eq('is_read', false)
-      .then(({ count }) => setNotifications(count ?? 0))
-  }, [profile?.id, profile?.district, location.pathname])
+    if (!profile?.id) return
+    const fetchPending = async () => {
+      try {
+        const { count } = await supabase
+          .from('bookings')
+          .select('id', { count: 'exact', head: true })
+          .eq('provider_id', profile.id)
+          .in('status', ['provider_assigned', 'payment_pending', 'confirmed', 'in_progress'])
 
-  const tabs: NavTab[] = [
-    { icon:'🏠', label:'Home',     path:'/provider' },
-    { icon:'📩', label:'Requests', path:'/provider/myjobs',  badge: requests > 0 ? requests : undefined },
-    { icon:'💰', label:'Earnings', path:'/provider/earnings' },
-    { icon:'⭐', label:'Reviews',  path:'/provider/reviews' },
-    { icon:'☰', label:'Menu',     path:'/provider/profile', badge: notifications > 0 ? notifications : undefined },
+        setAssignedCount(count || 0)
+      } catch (e) {
+        // ignore
+      }
+    }
+    fetchPending()
+  }, [profile?.id, location.pathname])
+
+  const tabs: TabItem[] = [
+    { id: 'provider-home', label: 'Jobs', path: '/provider', icon: Briefcase, badge: assignedCount > 0 ? assignedCount : undefined },
+    { id: 'provider-earnings', label: 'Earnings', path: '/provider/earnings', icon: DollarSign },
+    { id: 'provider-kyc', label: 'KYC Verification', path: '/provider/kyc', icon: FileCheck },
+    { id: 'provider-profile', label: 'Profile', path: '/provider/profile', icon: User },
   ]
 
-  return <MobileNavBar tabs={tabs} />
+  return <BottomTabBar tabs={tabs} />
 }
 
+// ── ADMIN MOBILE BOTTOM NAVIGATION ──
 export function AdminMobileNav() {
-  const tabs: NavTab[] = [
-    { icon:'🏠', label:'Home',      path:'/admin' },
-    { icon:'📋', label:'Bookings',  path:'/admin/bookings' },
-    { icon:'👷', label:'Providers', path:'/admin/providers' },
-    { icon:'📄', label:'KYC',       path:'/admin/kyc' },
-    { icon:'☰', label:'Menu',      path:'/admin/settings' },
+  const tabs: TabItem[] = [
+    { id: 'admin-overview', label: 'Overview', path: '/admin', icon: LayoutDashboard },
+    { id: 'admin-bookings', label: 'Bookings', path: '/admin/bookings', icon: Calendar },
+    { id: 'admin-providers', label: 'Providers', path: '/admin/providers', icon: Users },
+    { id: 'admin-kyc', label: 'KYC Approval', path: '/admin/kyc', icon: ShieldCheck },
+    { id: 'admin-settings', label: 'Settings', path: '/admin/settings', icon: Settings },
   ]
-  return <MobileNavBar tabs={tabs} />
+
+  return <BottomTabBar tabs={tabs} />
 }
 
-function MobileNavBar({ tabs }: { tabs: NavTab[] }) {
-  const nav      = useNavigate()
+// Generic reusable bottom bar component
+function BottomTabBar({ tabs }: { tabs: TabItem[] }) {
+  const nav = useNavigate()
   const location = useLocation()
 
   return (
-    <>
-      {/* Spacer so content isn't hidden behind nav */}
-      <div style={{ height:72, flexShrink:0, display:'block' }} className="mobile-nav-spacer" />
+    <div className="lg:hidden">
+      {/* Spacer so bottom bar doesn't overlay page content */}
+      <div className="h-16 w-full" />
 
-      <nav style={{
-        position:   'fixed',
-        bottom:     0,
-        left:       0,
-        right:      0,
-        height:     64,
-        background: 'var(--card)',
-        borderTop:  '1px solid var(--border)',
-        display:    'flex',
-        alignItems: 'center',
-        justifyContent: 'space-around',
-        zIndex:     100,
-        paddingBottom: 'env(safe-area-inset-bottom)',
-        boxShadow: '0 -4px 24px rgba(0,0,0,0.08)',
-      }} className="mobile-nav">
-        {tabs.map((tab, i) => {
-          const isActive = location.pathname === tab.path ||
-            (tab.path !== '/dashboard' && tab.path !== '/provider' && location.pathname.startsWith(tab.path))
-          return (
-            <button key={i} onClick={() => nav(tab.path)}
-              style={{
-                flex: 1, display:'flex', flexDirection:'column', alignItems:'center',
-                justifyContent:'center', gap:3, background:'none', border:'none',
-                cursor:'pointer', padding:'6px 0', position:'relative',
-                color: isActive ? 'var(--brand)' : 'var(--text3)',
-                transition: 'all 0.18s ease',
-              }}>
-              {/* Active indicator */}
-              {isActive && (
-                <div style={{
-                  position:'absolute', top:-1, left:'50%', transform:'translateX(-50%)',
-                  width:32, height:3, background:'var(--brand)', borderRadius:'0 0 3px 3px',
-                }}/>
-              )}
-              {/* Icon with badge */}
-              <div style={{ position:'relative', display:'inline-block' }}>
-                <span style={{
-                  fontSize: isActive ? 22 : 20,
-                  transition: 'font-size 0.18s ease',
-                  filter: isActive ? 'none' : 'grayscale(0.3)',
-                }}>
-                  {tab.icon}
+      <nav className="fixed bottom-0 left-0 right-0 z-40 bg-white/95 dark:bg-navy-900/95 backdrop-blur-md border-t border-slate-200/80 dark:border-navy-800 px-2 py-1 shadow-floating">
+        <div className="flex items-center justify-around max-w-lg mx-auto">
+          {tabs.map(tab => {
+            const Icon = tab.icon
+            const isActive =
+              tab.path === '/dashboard' || tab.path === '/provider' || tab.path === '/admin'
+                ? location.pathname === tab.path
+                : location.pathname.startsWith(tab.path)
+
+            return (
+              <button
+                key={tab.id}
+                type="button"
+                onClick={() => nav(tab.path)}
+                className={`relative flex flex-col items-center justify-center py-1.5 px-3 min-w-[56px] rounded-xl transition-all duration-150 active:scale-95 ${
+                  isActive
+                    ? 'text-brand-500 font-bold'
+                    : 'text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
+                }`}
+              >
+                <div className="relative">
+                  <Icon className={`w-5 h-5 transition-transform ${isActive ? 'scale-110' : ''}`} />
+                  {tab.badge !== undefined && tab.badge > 0 && (
+                    <span className="absolute -top-1.5 -right-2 px-1.5 py-0.2 min-w-[16px] h-4 text-[10px] font-extrabold text-white bg-brand-500 rounded-full flex items-center justify-center pulse-badge">
+                      {tab.badge}
+                    </span>
+                  )}
+                </div>
+                <span className={`text-[10px] mt-1 tracking-tight ${isActive ? 'font-bold text-brand-600 dark:text-brand-400' : 'font-medium'}`}>
+                  {tab.label}
                 </span>
-                {!!tab.badge && (
-                  <div style={{
-                    position:'absolute', top:-4, right:-6,
-                    background:'#ef4444', color:'#fff',
-                    fontSize:9, fontWeight:800,
-                    minWidth:16, height:16,
-                    borderRadius:10, display:'flex',
-                    alignItems:'center', justifyContent:'center',
-                    padding:'0 3px', border:'2px solid var(--card)',
-                  }}>
-                    {tab.badge > 9 ? '9+' : tab.badge}
-                  </div>
-                )}
-              </div>
-              <span style={{
-                fontSize: 10, fontWeight: isActive ? 700 : 500,
-                fontFamily:'Inter,sans-serif',
-                color: isActive ? 'var(--brand)' : 'var(--text3)',
-              }}>
-                {tab.label}
-              </span>
-            </button>
-          )
-        })}
-      </nav>
 
-      {/* Only show on mobile */}
-      <style>{`
-        .mobile-nav { display: flex !important }
-        .mobile-nav-spacer { display: block !important }
-        @media (min-width: 768px) {
-          .mobile-nav { display: none !important }
-          .mobile-nav-spacer { display: none !important }
-        }
-      `}</style>
-    </>
+                {/* Active bottom indicator pill */}
+                {isActive && (
+                  <span className="absolute -bottom-1 w-5 h-0.5 rounded-full bg-brand-500 shadow-sm" />
+                )}
+              </button>
+            )
+          })}
+        </div>
+      </nav>
+    </div>
   )
 }

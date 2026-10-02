@@ -1,37 +1,31 @@
-import { Routes, Route, useNavigate } from 'react-router-dom'
+import React from 'react'
+import { Routes, Route, Navigate } from 'react-router-dom'
 import Sidebar from '@/components/layout/Sidebar'
 import { ProviderMobileNav } from '@/components/layout/MobileNav'
-import ProviderHome     from '@/components/provider/ProviderHome'
-import ProviderJobs     from '@/components/provider/ProviderJobs'
+import ProviderHome from '@/components/provider/ProviderHome'
 import ProviderEarnings from '@/components/provider/ProviderEarnings'
-import ProviderKyc      from '@/components/provider/ProviderKyc'
-import ProviderProfile  from '@/components/provider/ProviderProfile'
-
-const NAV = [
-  { icon:'🏠', label:'Dashboard',    path:'/provider',           section:'Main' },
-  { icon:'📩', label:'Job Requests', path:'/provider/jobs',      badge:2 },
-  { icon:'📋', label:'My Jobs',      path:'/provider/myjobs' },
-  { icon:'💰', label:'Earnings',     path:'/provider/earnings' },
-  { icon:'⭐', label:'Reviews',      path:'/provider/reviews' },
-  { icon:'📄', label:'KYC Docs',     path:'/provider/kyc' },
-  { icon:'👤', label:'Profile',      path:'/provider/profile',   section:'Account' },
-]
+import ProviderKyc from '@/components/provider/ProviderKyc'
+import ProviderProfile from '@/components/provider/ProviderProfile'
 
 export default function ProviderDashboard() {
   return (
-    <div style={{display:'flex'}}>
-      <Sidebar items={NAV} basePath="/provider" />
-      <main className="main-layout">
+    <div className="flex min-h-screen bg-slate-50 dark:bg-navy-950">
+      {/* Desktop Persistent Sidebar */}
+      <Sidebar role="provider" />
+
+      {/* Main Content Area */}
+      <div className="flex-1 min-w-0 flex flex-col">
         <Routes>
-          <Route index            element={<ProviderHome />} />
-          <Route path="jobs"      element={<ProviderJobs />} />
-          <Route path="myjobs"    element={<ProviderJobs myJobs />} />
-          <Route path="earnings"  element={<ProviderEarnings />} />
-          <Route path="kyc"       element={<ProviderKyc />} />
-          <Route path="profile"   element={<ProviderProfile />} />
-          <Route path="*"         element={<ProviderHome />} />
+          <Route index element={<ProviderHome />} />
+          <Route path="earnings" element={<ProviderEarnings />} />
+          <Route path="kyc" element={<ProviderKyc />} />
+          <Route path="reviews" element={<ProviderHome />} />
+          <Route path="profile" element={<ProviderProfile />} />
+          <Route path="*" element={<Navigate to="/provider" replace />} />
         </Routes>
-      </main>
+      </div>
+
+      {/* Mobile Fixed Bottom Navigation */}
       <ProviderMobileNav />
     </div>
   )

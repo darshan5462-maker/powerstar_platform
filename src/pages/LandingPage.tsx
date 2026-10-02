@@ -1,231 +1,321 @@
+import React, { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import ThemeToggle from '@/components/ui/ThemeToggle'
-import { MANPOWER, VEHICLES } from '@/data/services'
-import { DISTRICTS, getCities } from '@/data/karnataka'
-import { useState } from 'react'
-
-const STATS  = [['4,200+','Verified Providers'],['850+','Vehicles Available'],['31','Karnataka Districts'],['4.8★','Avg. Rating']]
-const TRUST  = [['✅','KYC Verified','Every provider passes Aadhaar + background check'],['💰','Transparent Pricing','Exact cost before confirmation. No hidden fees.'],['🛡️','Work Guarantee','Not happy? Free rework within 24 hours.'],['📍','Live GPS','Track provider from acceptance to completion.'],['💬','Kannada Support','Available in Kannada, Hindi, English & more.'],['⚡','3-min Response','Average acceptance time across all 31 districts.']]
-const HOW    = [['🔍','Search','Choose service, district & city. See online providers instantly.'],['👤','Compare','View profiles, ratings & upfront price estimates.'],['💳','Book & Pay','Confirm via UPI/card. Pay only after job completion.'],['📍','Track','Real-time GPS tracking until the job is done.']]
+import { motion } from 'framer-motion'
+import {
+  Zap,
+  ShieldCheck,
+  MapPin,
+  Clock,
+  Star,
+  CheckCircle2,
+  ArrowRight,
+  Smartphone,
+  Users,
+  Search,
+  ChevronRight,
+  Sun,
+  Moon,
+  Sparkles,
+  Lock,
+  DollarSign
+} from 'lucide-react'
+import { ALL_SERVICES, MANPOWER, VEHICLES, RTO, FINANCIAL } from '@/data/services'
+import { DISTRICTS } from '@/data/karnataka'
+import { useThemeStore } from '@/store/themeStore'
 
 export default function LandingPage() {
-  const navigate = useNavigate()
-  const [tab, setTab]         = useState<'workers'|'vehicles'|'rto'>('workers')
-  const [district, setDistrict] = useState(DISTRICTS[0].id)
-  const [hoveredSvc, setHoveredSvc] = useState<string|null>(null)
+  const nav = useNavigate()
+  const { isDark, toggleTheme } = useThemeStore()
+
+  const [activeTab, setActiveTab] = useState<'manpower' | 'vehicle' | 'rto' | 'financial'>('manpower')
+
+  const STATS = [
+    { num: '31', label: 'Karnataka Districts', icon: MapPin },
+    { num: '4,200+', label: 'KYC-Verified Technicians', icon: ShieldCheck },
+    { num: '98.6%', label: 'On-Time Dispatch Rate', icon: Clock },
+    { num: '4.9★', label: 'Average Customer Rating', icon: Star },
+  ]
+
+  const WORKFLOW_STEPS = [
+    {
+      num: '01',
+      title: 'Choose Service & Address',
+      desc: 'Pick your required service, date, and Karnataka location in 30 seconds.',
+      icon: '📝'
+    },
+    {
+      num: '02',
+      title: 'Admin Match & Dispatch',
+      desc: 'Powerstar admin assigns the best certified professional based on skill & proximity.',
+      icon: '👷'
+    },
+    {
+      num: '03',
+      title: 'UPI Direct Checkout',
+      desc: 'Pay seamlessly via Google Pay, PhonePe, Paytm, or BHIM. Zero extra fees.',
+      icon: '⚡'
+    },
+    {
+      num: '04',
+      title: 'Verified Job Completion',
+      desc: 'Technician arrives, starts and completes work verified by customer security OTP.',
+      icon: '⭐'
+    },
+  ]
 
   return (
-    <div style={{background:'var(--bg)',minHeight:'100vh'}}>
+    <div className="min-h-screen bg-slate-50 dark:bg-navy-950 text-slate-900 dark:text-white selection:bg-brand-500 selection:text-white">
+      {/* ── TOP NAVBAR ── */}
+      <header className="sticky top-0 z-50 bg-white/90 dark:bg-navy-900/90 backdrop-blur-md border-b border-slate-200/80 dark:border-navy-800 px-4 sm:px-8 py-3.5">
+        <div className="max-w-7xl mx-auto flex items-center justify-between">
+          <div className="flex items-center gap-2.5 cursor-pointer" onClick={() => nav('/')}>
+            <div className="w-10 h-10 rounded-2xl bg-gradient-to-br from-brand-500 to-brand-600 flex items-center justify-center text-white shadow-brand">
+              <Zap className="w-5 h-5 fill-white" />
+            </div>
+            <div>
+              <span className="font-extrabold text-lg sm:text-xl tracking-wider font-display">
+                POWER<span className="text-brand-500">STAR</span>
+              </span>
+              <span className="text-[10px] text-slate-400 block font-semibold -mt-1">
+                Karnataka Service Network
+              </span>
+            </div>
+          </div>
 
-      {/* NAV */}
-      <nav style={{position:'sticky',top:0,zIndex:50,background:'var(--card)',borderBottom:'1px solid var(--border)',padding:'0 32px',display:'flex',alignItems:'center',justifyContent:'space-between',height:64,backdropFilter:'blur(12px)'}}>
-        <div style={{display:'flex',alignItems:'center',gap:10}}>
-          <div style={{width:38,height:38,background:'linear-gradient(135deg,#f97316,#ea580c)',borderRadius:11,display:'flex',alignItems:'center',justifyContent:'center',fontSize:20}}>⚡</div>
-          <span style={{fontFamily:'Plus Jakarta Sans,sans-serif',fontWeight:800,fontSize:18}}>POWER<span style={{color:'#f97316'}}>STAR</span></span>
-        </div>
-        <div style={{display:'flex',alignItems:'center',gap:8}}>
-          <ThemeToggle />
-          <button className="btn btn-ghost btn-sm" onClick={()=>navigate('/auth')}>Login</button>
-          <button className="btn btn-outline btn-sm" onClick={()=>navigate('/auth')}>Join as Provider</button>
-          <button className="btn btn-brand btn-sm" onClick={()=>navigate('/auth')}>Book a Service</button>
-        </div>
-      </nav>
+          <div className="flex items-center gap-2 sm:gap-3">
+            <button
+              type="button"
+              onClick={toggleTheme}
+              className="w-9 h-9 rounded-xl bg-slate-100 dark:bg-navy-800 text-slate-600 dark:text-slate-300 flex items-center justify-center hover:text-brand-500 transition-colors"
+            >
+              {isDark ? <Sun className="w-4 h-4 text-amber-400" /> : <Moon className="w-4 h-4" />}
+            </button>
 
-      {/* HERO */}
-      <section style={{padding:'80px 32px 60px',textAlign:'center',position:'relative',overflow:'hidden'}}>
-        <div style={{position:'absolute',top:-120,left:'50%',transform:'translateX(-50%)',width:600,height:400,background:'radial-gradient(ellipse,rgba(249,115,22,0.08) 0%,transparent 70%)',pointerEvents:'none'}} />
-        <div style={{display:'inline-flex',alignItems:'center',gap:8,background:'var(--brand-light)',border:'1px solid rgba(249,115,22,0.25)',color:'var(--brand)',padding:'6px 16px',borderRadius:99,fontSize:12,fontWeight:600,marginBottom:28}}>
-          <div className="live-dot" style={{width:6,height:6}} />
-          4,200+ workers live across Karnataka
+            <button
+              type="button"
+              onClick={() => nav('/auth')}
+              className="hidden sm:inline-flex px-4 py-2 rounded-xl text-xs font-bold text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-navy-800 transition-colors"
+            >
+              Partner Portal
+            </button>
+
+            <button
+              type="button"
+              onClick={() => nav('/auth')}
+              className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-brand-500 to-brand-600 hover:from-brand-600 hover:to-brand-700 text-white font-bold text-xs shadow-brand flex items-center gap-1.5 active:scale-95 transition-all"
+            >
+              <span>Book Service</span>
+              <ArrowRight className="w-3.5 h-3.5" />
+            </button>
+          </div>
         </div>
-        <h1 style={{fontSize:'clamp(36px,6vw,72px)',fontWeight:900,lineHeight:1.06,letterSpacing:'-1.5px',marginBottom:20,fontFamily:'Plus Jakarta Sans,sans-serif'}}>
-          City workers,<br/><span style={{background:'linear-gradient(135deg,#f97316,#ea580c)',WebkitBackgroundClip:'text',WebkitTextFillColor:'transparent'}}>on demand.</span><br/>
-          <span style={{color:'var(--text2)'}}>Across Karnataka.</span>
-        </h1>
-        <p style={{fontSize:18,color:'var(--text2)',maxWidth:540,margin:'0 auto 36px',lineHeight:1.65}}>
-          Book verified electricians, plumbers, drivers & transport vehicles. Transparent pricing, live GPS, KYC-verified providers.
-        </p>
-        <div style={{display:'flex',gap:12,justifyContent:'center',flexWrap:'wrap'}}>
-          <button className="btn btn-brand btn-lg" onClick={()=>navigate('/auth')}>Get Started Free →</button>
-          <button className="btn btn-outline btn-lg" onClick={()=>document.getElementById('vehicles')?.scrollIntoView({behavior:'smooth'})}>View Vehicles</button>
+      </header>
+
+      {/* ── HERO SECTION ── */}
+      <section className="relative pt-12 pb-20 px-4 sm:px-6 overflow-hidden">
+        {/* Ambient Glows */}
+        <div className="absolute top-10 left-1/2 -translate-x-1/2 w-[700px] h-[400px] bg-gradient-to-r from-brand-500/10 via-primary-500/10 to-brand-500/10 rounded-full blur-3xl pointer-events-none" />
+
+        <div className="max-w-4xl mx-auto text-center relative z-10 space-y-6">
+          <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-brand-500/10 border border-brand-500/30 text-brand-600 dark:text-brand-400 text-xs font-bold shadow-xs">
+            <Sparkles className="w-3.5 h-3.5" />
+            <span>Karnataka's #1 On-Demand Service Marketplace</span>
+          </div>
+
+          <h1 className="text-3xl sm:text-6xl font-black font-display tracking-tight leading-tight text-slate-900 dark:text-white">
+            Certified City Experts <br className="hidden sm:block" />
+            <span className="bg-gradient-to-r from-brand-500 via-brand-600 to-primary-600 bg-clip-text text-transparent">
+              Dispatched to Your Doorstep.
+            </span>
+          </h1>
+
+          <p className="text-sm sm:text-base text-slate-600 dark:text-slate-300 max-w-2xl mx-auto leading-relaxed">
+            Book KYC-verified electricians, plumbers, home cleaning specialists, and goods transport vehicles across all 31 Karnataka districts with 100% secure UPI payments.
+          </p>
+
+          <div className="flex flex-col sm:flex-row items-center justify-center gap-3 pt-2">
+            <button
+              type="button"
+              onClick={() => nav('/auth')}
+              className="w-full sm:w-auto px-8 py-4 rounded-2xl bg-gradient-to-r from-brand-500 to-brand-600 hover:from-brand-600 hover:to-brand-700 text-white font-extrabold text-sm shadow-brand flex items-center justify-center gap-2 transition-all active:scale-95"
+            >
+              <span>Explore & Book a Service</span>
+              <ArrowRight className="w-4 h-4" />
+            </button>
+
+            <button
+              type="button"
+              onClick={() => nav('/auth')}
+              className="w-full sm:w-auto px-6 py-4 rounded-2xl bg-white dark:bg-navy-900 border border-slate-200 dark:border-navy-700 hover:border-brand-500 text-slate-800 dark:text-slate-200 font-bold text-sm shadow-subtle transition-colors"
+            >
+              Join as a Service Partner
+            </button>
+          </div>
         </div>
       </section>
 
-      {/* STATS */}
-      <div style={{background:'var(--card)',borderTop:'1px solid var(--border)',borderBottom:'1px solid var(--border)',margin:'0 32px',borderRadius:16}}>
-        <div style={{display:'grid',gridTemplateColumns:'repeat(4,1fr)'}}>
-          {STATS.map(([v,l],i)=>(
-            <div key={i} style={{padding:'24px 16px',textAlign:'center',borderRight:i<3?'1px solid var(--border)':'none'}}>
-              <div style={{fontSize:28,fontWeight:900,color:'var(--brand)',fontFamily:'Plus Jakarta Sans,sans-serif'}}>{v}</div>
-              <div style={{fontSize:13,color:'var(--text2)',marginTop:4}}>{l}</div>
-            </div>
-          ))}
+      {/* ── STATS STRIP ── */}
+      <section className="max-w-6xl mx-auto px-4 sm:px-6 mb-16">
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4 p-5 sm:p-6 bg-white dark:bg-navy-900 rounded-3xl border border-slate-200/80 dark:border-navy-800 shadow-card">
+          {STATS.map((s, idx) => {
+            const Icon = s.icon
+            return (
+              <div key={idx} className="p-3 text-center sm:text-left flex items-center gap-3.5">
+                <div className="w-11 h-11 rounded-2xl bg-brand-500/10 text-brand-500 flex items-center justify-center flex-shrink-0">
+                  <Icon className="w-5 h-5" />
+                </div>
+                <div>
+                  <p className="text-xl sm:text-2xl font-black font-display text-slate-900 dark:text-white">
+                    {s.num}
+                  </p>
+                  <p className="text-xs text-slate-500 dark:text-slate-400 font-medium">
+                    {s.label}
+                  </p>
+                </div>
+              </div>
+            )
+          })}
         </div>
-      </div>
+      </section>
 
-      {/* SEARCH */}
-      <section style={{padding:'60px 32px',background:'var(--bg2)'}}>
-        <div style={{textAlign:'center',marginBottom:36}}>
-          <p style={{fontSize:11,fontWeight:700,color:'var(--brand)',textTransform:'uppercase',letterSpacing:'1.5px',marginBottom:8}}>Quick Find</p>
-          <h2 style={{fontSize:34,fontWeight:800,fontFamily:'Plus Jakarta Sans,sans-serif',marginBottom:8}}>Find what you need, right now</h2>
-          <p style={{color:'var(--text2)',fontSize:15}}>Search 4,200+ providers across all Karnataka districts</p>
+      {/* ── SERVICES EXPLORATION TABS ── */}
+      <section className="max-w-6xl mx-auto px-4 sm:px-6 mb-20 space-y-8">
+        <div className="text-center max-w-xl mx-auto space-y-2">
+          <span className="text-xs font-bold uppercase tracking-wider text-brand-500 font-mono">
+            Full Service Catalog
+          </span>
+          <h2 className="text-2xl sm:text-3xl font-black font-display text-slate-900 dark:text-white">
+            Everything Your Home & Business Needs
+          </h2>
+          <p className="text-xs sm:text-sm text-slate-500 dark:text-slate-400">
+            Transparent fixed pricing, zero hidden charges, matched by Powerstar dispatch.
+          </p>
         </div>
-        <div className="glass" style={{maxWidth:780,margin:'0 auto',padding:28}}>
-          <div className="tab-bar" style={{marginBottom:24}}>
-            {([['workers','👷 Workers'],['vehicles','🚛 Vehicles'],['rto','📋 RTO / Finance']] as const).map(([t,l])=>(
-              <button key={t} className={`tab-item ${tab===t?'active':''}`} onClick={()=>setTab(t)}>{l}</button>
+
+        {/* Catalog Tab Switcher */}
+        <div className="flex justify-center">
+          <div className="inline-flex p-1.5 bg-slate-200/80 dark:bg-navy-900 rounded-2xl gap-1 max-w-full overflow-x-auto no-scrollbar">
+            {[
+              { id: 'manpower', label: '👷 Manpower (20)' },
+              { id: 'vehicle', label: '🚛 Vehicles & Logistics (13)' },
+              { id: 'rto', label: '📋 RTO & Legal (5)' },
+              { id: 'financial', label: '💰 Financial Services (4)' },
+            ].map(t => (
+              <button
+                key={t.id}
+                type="button"
+                onClick={() => setActiveTab(t.id as any)}
+                className={`px-4 py-2 rounded-xl text-xs font-bold whitespace-nowrap transition-all ${
+                  activeTab === t.id
+                    ? 'bg-white dark:bg-brand-500 text-brand-600 dark:text-white shadow-sm'
+                    : 'text-slate-600 dark:text-slate-400 hover:text-slate-900'
+                }`}
+              >
+                {t.label}
+              </button>
             ))}
           </div>
-          <div style={{display:'grid',gridTemplateColumns:'repeat(3,1fr)',gap:16,marginBottom:16}}>
-            <div>
-              <label className="input-label">{tab==='workers'?'Service Type':tab==='vehicles'?'Vehicle Type':'Service'}</label>
-              <select className="input">
-                {tab==='workers'  && MANPOWER.map(s=><option key={s.id}>{s.name}</option>)}
-                {tab==='vehicles' && VEHICLES.map(s=><option key={s.id}>{s.name}</option>)}
-                {tab==='rto'      && ['Vehicle Insurance','PUC Certificate','Driving License','Vehicle Passing','GPS Install','Vehicle Loan','Personal Loan'].map(s=><option key={s}>{s}</option>)}
-              </select>
-            </div>
-            <div>
-              <label className="input-label">District</label>
-              <select className="input" value={district} onChange={e=>setDistrict(e.target.value)}>
-                {DISTRICTS.map(d=><option key={d.id} value={d.id}>{d.name}</option>)}
-              </select>
-            </div>
-            <div>
-              <label className="input-label">City / Area</label>
-              <select className="input">
-                {getCities(district).map(c=><option key={c}>{c}</option>)}
-              </select>
-            </div>
-          </div>
-          <button className="btn btn-brand" style={{width:'100%',padding:'12px',fontSize:15}} onClick={()=>navigate('/auth')}>
-            🔍 Find Available Providers Now
-          </button>
         </div>
-      </section>
 
-      {/* MANPOWER GRID */}
-      <section style={{padding:'60px 32px'}}>
-        <p style={{fontSize:11,fontWeight:700,color:'var(--brand)',textTransform:'uppercase',letterSpacing:'1.5px',marginBottom:8}}>Manpower Services</p>
-        <h2 style={{fontSize:34,fontWeight:800,fontFamily:'Plus Jakarta Sans,sans-serif',marginBottom:6}}>Every skilled worker, one platform</h2>
-        <p style={{color:'var(--text2)',fontSize:15,marginBottom:36}}>KYC verified professionals, background checked &amp; rated by thousands of customers</p>
-        <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(140px,1fr))',gap:12}}>
-          {MANPOWER.map(s=>(
-            <div key={s.id}
-              className={`glass ${hoveredSvc===s.id?'glass-hover':''}`}
-              style={{padding:'18px 12px',textAlign:'center',cursor:'pointer',transition:'all 0.2s'}}
-              onClick={()=>navigate('/auth')}
-              onMouseEnter={()=>setHoveredSvc(s.id)}
-              onMouseLeave={()=>setHoveredSvc(null)}
+        {/* Services Grid */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+          {ALL_SERVICES.filter(s => s.type === activeTab).map(s => (
+            <div
+              key={s.id}
+              onClick={() => nav('/auth')}
+              className="p-5 rounded-3xl bg-white dark:bg-navy-900 border border-slate-200/80 dark:border-navy-800 hover:border-brand-500/60 shadow-card hover:shadow-card-hover transition-all cursor-pointer flex flex-col justify-between group"
             >
-              <div style={{fontSize:28,marginBottom:8}}>{s.icon}</div>
-              <div style={{fontSize:12,fontWeight:600,marginBottom:3}}>{s.name}</div>
-              <div style={{fontSize:11,color:'var(--text3)'}}>from ₹{s.basePrice}{s.unit}</div>
-            </div>
-          ))}
-        </div>
-      </section>
+              <div>
+                <div className="flex items-center gap-3 mb-2">
+                  <div className="w-12 h-12 rounded-2xl bg-slate-100 dark:bg-navy-800 flex items-center justify-center text-2xl group-hover:scale-110 transition-transform flex-shrink-0">
+                    {s.icon}
+                  </div>
+                  <div>
+                    <h3 className="font-bold text-sm text-slate-900 dark:text-white group-hover:text-brand-500 transition-colors">
+                      {s.name}
+                    </h3>
+                    {s.nameKn && (
+                      <p className="text-xs text-slate-400 font-medium">{s.nameKn}</p>
+                    )}
+                  </div>
+                </div>
+                <p className="text-xs text-slate-500 dark:text-slate-400 line-clamp-2 mb-4">
+                  {s.desc}
+                </p>
+              </div>
 
-      {/* VEHICLES */}
-      <section id="vehicles" style={{padding:'60px 32px',background:'var(--bg2)'}}>
-        <p style={{fontSize:11,fontWeight:700,color:'var(--brand)',textTransform:'uppercase',letterSpacing:'1.5px',marginBottom:8}}>Goods Transport</p>
-        <h2 style={{fontSize:34,fontWeight:800,fontFamily:'Plus Jakarta Sans,sans-serif',marginBottom:6}}>Right vehicle for every load</h2>
-        <p style={{color:'var(--text2)',fontSize:15,marginBottom:36}}>GPS tracked, insured, fixed pricing. Book with or without workers.</p>
-        <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(200px,1fr))',gap:14}}>
-          {VEHICLES.map(v=>(
-            <div key={v.id} className="glass glass-hover" style={{padding:20,cursor:'pointer'}} onClick={()=>navigate('/auth')}>
-              <div style={{fontSize:36,marginBottom:10}}>{v.icon}</div>
-              <div style={{fontWeight:700,fontSize:15,marginBottom:3}}>{v.name}</div>
-              <div style={{fontSize:12,color:'var(--text2)',marginBottom:10}}>{v.capacity}</div>
-              <div style={{display:'flex',alignItems:'center',gap:8,flexWrap:'wrap'}}>
-                <span style={{fontWeight:800,fontSize:16,color:'var(--brand)'}}>₹{v.basePrice.toLocaleString('en-IN')}</span>
-                <span style={{fontSize:11,color:'var(--text3)'}}>{v.unit}</span>
-                {v.withWorker && <span className="badge badge-green" style={{fontSize:10}}>+worker</span>}
+              <div className="pt-3 border-t border-slate-100 dark:border-navy-800 flex items-center justify-between">
+                <div>
+                  <span className="text-[10px] text-slate-400 uppercase font-semibold block">Base Pricing</span>
+                  <span className="text-sm font-black text-brand-600 dark:text-brand-400">
+                    ₹{s.basePrice}{s.unit}
+                  </span>
+                </div>
+
+                <span className="text-xs font-bold text-brand-500 group-hover:translate-x-1 transition-transform flex items-center gap-1">
+                  Book <ChevronRight className="w-3.5 h-3.5" />
+                </span>
               </div>
             </div>
           ))}
         </div>
       </section>
 
-      {/* HOW IT WORKS */}
-      <section style={{padding:'60px 32px'}}>
-        <div style={{textAlign:'center',marginBottom:48}}>
-          <p style={{fontSize:11,fontWeight:700,color:'var(--brand)',textTransform:'uppercase',letterSpacing:'1.5px',marginBottom:8}}>How It Works</p>
-          <h2 style={{fontSize:34,fontWeight:800,fontFamily:'Plus Jakarta Sans,sans-serif'}}>Booked in under 3 minutes</h2>
-        </div>
-        <div style={{display:'grid',gridTemplateColumns:'repeat(4,1fr)',gap:20,maxWidth:900,margin:'0 auto'}}>
-          {HOW.map(([icon,title,desc],i)=>(
-            <div key={i} className="glass" style={{padding:24,textAlign:'center'}}>
-              <div style={{width:52,height:52,background:'linear-gradient(135deg,rgba(249,115,22,0.15),rgba(234,88,12,0.08))',borderRadius:14,display:'flex',alignItems:'center',justifyContent:'center',fontSize:24,margin:'0 auto 14px'}}>
-                {icon}
-              </div>
-              <div style={{fontWeight:700,fontSize:15,marginBottom:8,fontFamily:'Plus Jakarta Sans,sans-serif'}}>{title}</div>
-              <div style={{fontSize:13,color:'var(--text2)',lineHeight:1.55}}>{desc}</div>
-              <div style={{marginTop:12,fontFamily:'Plus Jakarta Sans,sans-serif',fontSize:28,fontWeight:900,color:'var(--border)'}}>0{i+1}</div>
-            </div>
-          ))}
-        </div>
-      </section>
-
-      {/* TRUST */}
-      <section style={{padding:'60px 32px',background:'var(--bg2)'}}>
-        <div style={{textAlign:'center',marginBottom:40}}>
-          <p style={{fontSize:11,fontWeight:700,color:'var(--brand)',textTransform:'uppercase',letterSpacing:'1.5px',marginBottom:8}}>Why POWERSTAR</p>
-          <h2 style={{fontSize:34,fontWeight:800,fontFamily:'Plus Jakarta Sans,sans-serif'}}>Built for Karnataka, built to last</h2>
-        </div>
-        <div style={{display:'grid',gridTemplateColumns:'repeat(3,1fr)',gap:16,maxWidth:900,margin:'0 auto'}}>
-          {TRUST.map(([icon,title,desc],i)=>(
-            <div key={i} className="glass" style={{padding:22}}>
-              <div style={{width:42,height:42,background:'linear-gradient(135deg,rgba(249,115,22,0.12),rgba(234,88,12,0.06))',borderRadius:12,display:'flex',alignItems:'center',justifyContent:'center',fontSize:20,marginBottom:12}}>{icon}</div>
-              <div style={{fontWeight:700,fontSize:14,marginBottom:6,fontFamily:'Plus Jakarta Sans,sans-serif'}}>{title}</div>
-              <div style={{fontSize:13,color:'var(--text2)',lineHeight:1.55}}>{desc}</div>
-            </div>
-          ))}
-        </div>
-      </section>
-
-      {/* PROVIDER CTA */}
-      <section style={{padding:'80px 32px',textAlign:'center',background:'linear-gradient(135deg,rgba(249,115,22,0.04),var(--bg))'}}>
-        <div style={{display:'inline-flex',alignItems:'center',gap:8,background:'var(--brand-light)',border:'1px solid rgba(249,115,22,0.25)',color:'var(--brand)',padding:'6px 16px',borderRadius:99,fontSize:12,fontWeight:600,marginBottom:24}}>
-          👷 For Providers
-        </div>
-        <h2 style={{fontSize:40,fontWeight:900,fontFamily:'Plus Jakarta Sans,sans-serif',marginBottom:14,lineHeight:1.1}}>
-          Earn more.<br/><span style={{background:'linear-gradient(135deg,#f97316,#ea580c)',WebkitBackgroundClip:'text',WebkitTextFillColor:'transparent'}}>Work on your terms.</span>
-        </h2>
-        <p style={{color:'var(--text2)',fontSize:16,maxWidth:440,margin:'0 auto 36px',lineHeight:1.6}}>
-          Join 4,200+ workers earning steady income. Set your schedule, choose your jobs, get paid within 24 hours.
-        </p>
-        <div style={{display:'flex',gap:16,justifyContent:'center',flexWrap:'wrap',marginBottom:40}}>
-          {[['₹800–2,400','Daily earnings'],['24 hrs','Settlement'],['0%','Subscription fee'],['4.8★','Platform rating']].map(([v,l],i)=>(
-            <div key={i} className="glass" style={{padding:'16px 24px',minWidth:120,textAlign:'center'}}>
-              <div style={{fontSize:20,fontWeight:800,color:'var(--brand)',fontFamily:'Plus Jakarta Sans,sans-serif'}}>{v}</div>
-              <div style={{fontSize:12,color:'var(--text2)',marginTop:4}}>{l}</div>
-            </div>
-          ))}
-        </div>
-        <button className="btn btn-brand btn-lg" onClick={()=>navigate('/auth')}>Register as Provider →</button>
-      </section>
-
-      {/* FOOTER */}
-      <footer style={{borderTop:'1px solid var(--border)',background:'var(--card)',padding:'48px 32px 32px'}}>
-        <div style={{display:'grid',gridTemplateColumns:'2fr 1fr 1fr 1fr',gap:40,marginBottom:32}}>
-          <div>
-            <div style={{display:'flex',alignItems:'center',gap:10,marginBottom:12}}>
-              <div style={{width:32,height:32,background:'linear-gradient(135deg,#f97316,#ea580c)',borderRadius:9,display:'flex',alignItems:'center',justifyContent:'center',fontSize:16}}>⚡</div>
-              <span style={{fontFamily:'Plus Jakarta Sans,sans-serif',fontWeight:800,fontSize:16}}>POWER<span style={{color:'#f97316'}}>STAR</span></span>
-            </div>
-            <p style={{color:'var(--text2)',fontSize:13,lineHeight:1.65,maxWidth:240}}>Karnataka's most trusted platform for verified manpower, goods transport and city services across all 31 districts.</p>
+      {/* ── HOW POWERSTAR ADMIN DISPATCH WORKS ── */}
+      <section className="bg-white dark:bg-navy-900 py-16 px-4 sm:px-6 border-y border-slate-200/80 dark:border-navy-800">
+        <div className="max-w-6xl mx-auto space-y-12">
+          <div className="text-center max-w-xl mx-auto space-y-2">
+            <span className="text-xs font-bold uppercase tracking-wider text-brand-500 font-mono">
+              The Powerstar Difference
+            </span>
+            <h2 className="text-2xl sm:text-3xl font-black font-display text-slate-900 dark:text-white">
+              Why Customers Trust Our Dispatch Model
+            </h2>
+            <p className="text-xs sm:text-sm text-slate-500 dark:text-slate-400">
+              No guessing which worker is good. Powerstar admin matches the highest-rated verified professional for your specific job.
+            </p>
           </div>
-          {[{h:'Services',links:['Manpower','Vehicles','RTO Services','Financial']},{h:'Providers',links:['Register','Provider Login','KYC Guide','Earnings']},{h:'Company',links:['About','Careers','Privacy','Terms']}].map((col,i)=>(
-            <div key={i}>
-              <p style={{fontSize:11,fontWeight:700,color:'var(--text3)',textTransform:'uppercase',letterSpacing:'0.8px',marginBottom:14}}>{col.h}</p>
-              {col.links.map((l,j)=><p key={j} style={{fontSize:13,color:'var(--text2)',marginBottom:10,cursor:'pointer',transition:'color 0.15s'}} onMouseEnter={e=>(e.target as HTMLElement).style.color='var(--brand)'} onMouseLeave={e=>(e.target as HTMLElement).style.color='var(--text2)'}>{l}</p>)}
-            </div>
-          ))}
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+            {WORKFLOW_STEPS.map(step => (
+              <div
+                key={step.num}
+                className="p-6 rounded-3xl bg-slate-50 dark:bg-navy-950 border border-slate-200/80 dark:border-navy-800 space-y-3 relative"
+              >
+                <div className="flex items-center justify-between">
+                  <span className="text-3xl">{step.icon}</span>
+                  <span className="font-mono text-xs font-black text-brand-500 px-2 py-0.5 rounded-md bg-brand-500/10">
+                    {step.num}
+                  </span>
+                </div>
+                <h3 className="font-bold text-sm text-slate-900 dark:text-white">{step.title}</h3>
+                <p className="text-xs text-slate-500 dark:text-slate-400 leading-relaxed">{step.desc}</p>
+              </div>
+            ))}
+          </div>
         </div>
-        <div style={{borderTop:'1px solid var(--border)',paddingTop:20,display:'flex',justifyContent:'space-between',alignItems:'center'}}>
-          <p style={{fontSize:12,color:'var(--text3)'}}>© 2025 POWERSTAR Platform. All 31 Karnataka Districts.</p>
-          <p style={{fontSize:12,color:'var(--text3)'}}>Built with ❤️ in Karnataka</p>
+      </section>
+
+      {/* ── FOOTER ── */}
+      <footer className="bg-slate-900 dark:bg-navy-950 text-white py-12 px-4 sm:px-8 border-t border-slate-800">
+        <div className="max-w-6xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-6">
+          <div className="flex items-center gap-2.5">
+            <div className="w-8 h-8 rounded-xl bg-brand-500 flex items-center justify-center text-white font-black">
+              ⚡
+            </div>
+            <div>
+              <span className="font-black text-base tracking-wider font-display">POWERSTAR</span>
+              <p className="text-[10px] text-slate-400">© 2026 Powerstar Platform • Karnataka, India</p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-6 text-xs text-slate-400">
+            <span>UPI Verified</span>
+            <span>•</span>
+            <span>31 Districts Covered</span>
+            <span>•</span>
+            <span>Aadhaar KYC Certified</span>
+          </div>
         </div>
       </footer>
     </div>

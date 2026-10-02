@@ -1,79 +1,123 @@
-import { useState } from 'react'
-import PageHeader from '@/components/layout/PageHeader'
+import React, { useState } from 'react'
+import { Activity, CheckCircle2, AlertCircle, ArrowRight, ShieldCheck, DollarSign } from 'lucide-react'
+import HeaderBar from '@/components/layout/HeaderBar'
 import toast from 'react-hot-toast'
 
 const DISPUTES = [
-  {ref:'PS-28400',title:'Refund Request — Incomplete Work',      desc:'Customer reports plumber left without completing bathroom fitting. Amount: ₹1,200',    customer:'Kavitha Murthy', provider:'Suresh Kumar',  amount:1200,date:'Jun 15'},
-  {ref:'PS-28350',title:'Provider No-Show',                     desc:'Provider accepted job but never arrived. Customer waited 2+ hours. Refund: ₹480',        customer:'Priya Sharma',   provider:'Ganesh B.',     amount:480, date:'Jun 13'},
-  {ref:'PS-28280',title:'Overcharging Complaint',               desc:'Driver charged ₹300 extra beyond quoted Tata Ace price. Partial refund requested.',      customer:'Sunil Gowda',    provider:'Ravi Transport',amount:300, date:'Jun 11'},
+  {
+    ref: 'PS-28400',
+    title: 'Customer Resolution — Incomplete Work',
+    desc: 'Customer reported technician left before testing kitchen sink fitting. Partial refund or free revisit requested.',
+    customer: 'Kavitha Murthy',
+    provider: 'Suresh Kumar',
+    amount: 1200,
+    date: 'Recent'
+  },
+  {
+    ref: 'PS-28350',
+    title: 'Provider Dispatch Reassignment',
+    desc: 'Original provider vehicle broke down en route. Admin reassigned backup vehicle within 20 mins.',
+    customer: 'Priya Sharma',
+    provider: 'Ganesh B.',
+    amount: 480,
+    date: 'Yesterday'
+  }
 ]
 
 export default function AdminDisputes() {
-  const [resolved, setResolved] = useState<string[]>([])
+  const [resolvedRefs, setResolvedRefs] = useState<string[]>([])
 
-  function resolve(ref: string, action: string, msg: string) {
-    setResolved(r=>[...r,ref])
+  function handleAction(ref: string, msg: string) {
+    setResolvedRefs(prev => [...prev, ref])
     toast.success(msg)
   }
 
-  const open = DISPUTES.filter(d=>!resolved.includes(d.ref))
-  const done = DISPUTES.filter(d=>resolved.includes(d.ref))
+  const openDisputes = DISPUTES.filter(d => !resolvedRefs.includes(d.ref))
+  const resolvedDisputes = DISPUTES.filter(d => resolvedRefs.includes(d.ref))
 
   return (
-    <div>
-      <PageHeader title="Disputes" subtitle={`${open.length} open · ${done.length} resolved`} />
-      <div className="page-content" style={{maxWidth:780}}>
-        {open.length===0 && (
-          <div className="glass" style={{padding:48,textAlign:'center'}}>
-            <p style={{fontSize:40,marginBottom:12}}>✅</p>
-            <p style={{color:'var(--text2)',fontSize:15}}>All disputes resolved!</p>
+    <div className="min-h-screen bg-slate-50 dark:bg-navy-950 pb-24 lg:pb-12">
+      <HeaderBar title="Disputes & Customer Support" subtitle="Resolve customer escalations, rework requests & UPI refunds" showLocation={false} />
+
+      <main className="max-w-4xl mx-auto px-4 sm:px-6 pt-5 space-y-5">
+        <div className="flex items-center justify-between text-xs text-slate-500 dark:text-slate-400">
+          <span>{openDisputes.length} Open Escalations • {resolvedDisputes.length} Resolved</span>
+        </div>
+
+        {openDisputes.length === 0 ? (
+          <div className="p-12 text-center bg-white dark:bg-navy-900 rounded-3xl border border-slate-200 dark:border-navy-800 shadow-subtle space-y-2">
+            <CheckCircle2 className="w-12 h-12 text-emerald-500 mx-auto" />
+            <h3 className="font-bold text-base text-slate-900 dark:text-white">All Disputes Cleared!</h3>
+            <p className="text-xs text-slate-400">No active customer tickets or escalations.</p>
           </div>
-        )}
-        {open.map(d=>(
-          <div key={d.ref} className="glass" style={{padding:22,marginBottom:14}}>
-            <div style={{display:'flex',alignItems:'flex-start',justifyContent:'space-between',marginBottom:10}}>
-              <div>
-                <p style={{fontSize:11,color:'var(--text3)',marginBottom:4}}>Booking #{d.ref} · {d.date}</p>
-                <p style={{fontWeight:700,fontSize:15,marginBottom:6}}>{d.title}</p>
-              </div>
-              <span className="badge badge-red">Open</span>
-            </div>
-            <p style={{fontSize:13,color:'var(--text2)',lineHeight:1.6,marginBottom:12}}>{d.desc}</p>
-            <div style={{display:'flex',gap:16,fontSize:12,color:'var(--text2)',marginBottom:16}}>
-              <span>👤 Customer: <strong style={{color:'var(--text)'}}>{d.customer}</strong></span>
-              <span>👷 Provider: <strong style={{color:'var(--text)'}}>{d.provider}</strong></span>
-              <span>💰 Amount: <strong style={{color:'var(--brand)'}}>₹{d.amount.toLocaleString('en-IN')}</strong></span>
-            </div>
-            <div style={{display:'flex',gap:8,flexWrap:'wrap'}}>
-              <button className="btn btn-success btn-sm" onClick={()=>resolve(d.ref,'refund',`Refund ₹${d.amount} issued to ${d.customer} ✅`)}>
-                Issue Refund ₹{d.amount.toLocaleString('en-IN')}
-              </button>
-              <button className="btn btn-danger btn-sm" onClick={()=>resolve(d.ref,'denied',`Refund denied for ${d.ref}`)}>
-                Deny Refund
-              </button>
-              <button className="btn btn-outline btn-sm" onClick={()=>resolve(d.ref,'rebook',`Rebook scheduled for ${d.customer}`)}>
-                Rebook Worker
-              </button>
-            </div>
-          </div>
-        ))}
-        {done.length>0 && (
-          <div>
-            <p style={{fontSize:12,fontWeight:600,color:'var(--text3)',textTransform:'uppercase',letterSpacing:'0.8px',margin:'20px 0 12px'}}>Resolved</p>
-            {done.map(d=>(
-              <div key={d.ref} className="glass" style={{padding:16,marginBottom:10,opacity:0.6}}>
-                <div style={{display:'flex',justifyContent:'space-between',alignItems:'center'}}>
+        ) : (
+          <div className="space-y-4">
+            {openDisputes.map(d => (
+              <div
+                key={d.ref}
+                className="p-6 rounded-3xl bg-white dark:bg-navy-900 border border-slate-200/80 dark:border-navy-800 shadow-card space-y-4"
+              >
+                <div className="flex items-start justify-between gap-3">
                   <div>
-                    <p style={{fontSize:11,color:'var(--text3)'}}>{d.ref}</p>
-                    <p style={{fontSize:14,fontWeight:600}}>{d.title}</p>
+                    <span className="text-[10px] font-mono text-slate-400 font-bold block">
+                      Booking #{d.ref} • {d.date}
+                    </span>
+                    <h4 className="font-bold text-sm text-slate-900 dark:text-white mt-0.5">
+                      {d.title}
+                    </h4>
                   </div>
-                  <span className="badge badge-green">Resolved</span>
+                  <span className="px-2.5 py-0.5 rounded-full bg-red-500/10 text-red-600 text-[10px] font-bold border border-red-500/20">
+                    Open Ticket
+                  </span>
+                </div>
+
+                <p className="text-xs text-slate-600 dark:text-slate-300 leading-relaxed">
+                  {d.desc}
+                </p>
+
+                <div className="grid grid-cols-3 gap-2 p-3 rounded-2xl bg-slate-50 dark:bg-navy-800/60 border border-slate-200/60 dark:border-navy-700/60 text-xs">
+                  <div>
+                    <span className="text-[10px] text-slate-400 block">Customer</span>
+                    <span className="font-bold text-slate-900 dark:text-white">{d.customer}</span>
+                  </div>
+                  <div>
+                    <span className="text-[10px] text-slate-400 block">Provider</span>
+                    <span className="font-bold text-slate-900 dark:text-white">{d.provider}</span>
+                  </div>
+                  <div>
+                    <span className="text-[10px] text-slate-400 block">Amount</span>
+                    <span className="font-black text-brand-600 dark:text-brand-400">₹{d.amount}</span>
+                  </div>
+                </div>
+
+                <div className="flex flex-wrap gap-2 pt-2 border-t border-slate-100 dark:border-navy-800">
+                  <button
+                    type="button"
+                    onClick={() => handleAction(d.ref, `UPI Refund of ₹${d.amount} approved for ${d.customer}`)}
+                    className="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs shadow-sm transition-colors"
+                  >
+                    Issue UPI Refund (₹{d.amount})
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleAction(d.ref, `Free technician revisit scheduled for ${d.customer}`)}
+                    className="px-4 py-2 rounded-xl bg-brand-500 hover:bg-brand-600 text-white font-bold text-xs shadow-brand transition-colors"
+                  >
+                    Schedule Free Revisit
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleAction(d.ref, `Ticket #${d.ref} closed without refund`)}
+                    className="px-3.5 py-2 rounded-xl bg-slate-100 dark:bg-navy-800 hover:bg-slate-200 text-slate-700 dark:text-slate-300 font-semibold text-xs transition-colors"
+                  >
+                    Dismiss Ticket
+                  </button>
                 </div>
               </div>
             ))}
           </div>
         )}
-      </div>
+      </main>
     </div>
   )
 }

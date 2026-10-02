@@ -1,244 +1,395 @@
-import { useEffect, useState } from 'react'
+import React, { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { motion } from 'framer-motion'
+import {
+  Search,
+  Sparkles,
+  ShieldCheck,
+  Zap,
+  ArrowRight,
+  Clock,
+  Star,
+  Activity,
+  CheckCircle2,
+  TrendingUp,
+  MapPin,
+  ChevronRight,
+  Award,
+  AlertCircle
+} from 'lucide-react'
 import { useAuthStore } from '@/store/authStore'
-import { supabase } from '@/lib/supabase'
-import { MANPOWER, VEHICLES } from '@/data/services'
-import { StatusBadge } from '@/components/ui/Badge'
-
-const QUICK_SERVICES = [
-  { icon:'⚡', name:'Electrician',  slug:'electrician',  color:'#f59e0b', bg:'rgba(245,158,11,0.1)' },
-  { icon:'🔧', name:'Plumber',      slug:'plumber',      color:'#3b82f6', bg:'rgba(59,130,246,0.1)' },
-  { icon:'🧱', name:'Mason',        slug:'mason',        color:'#8b5cf6', bg:'rgba(139,92,246,0.1)' },
-  { icon:'🧹', name:'Cleaning',     slug:'cleaning',     color:'#10b981', bg:'rgba(16,185,129,0.1)' },
-  { icon:'🚐', name:'Tata Ace',     slug:'tata-ace',     color:'#f97316', bg:'rgba(249,115,22,0.1)' },
-  { icon:'🚗', name:'Driver',       slug:'driver',       color:'#06b6d4', bg:'rgba(6,182,212,0.1)' },
-  { icon:'🏗️', name:'JCB',         slug:'jcb',          color:'#ef4444', bg:'rgba(239,68,68,0.1)' },
-  { icon:'💪', name:'Loading',      slug:'loading',      color:'#84cc16', bg:'rgba(132,204,22,0.1)' },
-]
-
-const BANNERS = [
-  { bg:'linear-gradient(135deg,#f97316,#ea580c)', title:'First booking?', sub:'Get ₹100 off on your first service booking!', icon:'🎉', btn:'Claim Now' },
-  { bg:'linear-gradient(135deg,#7c3aed,#6d28d9)', title:'Verified workers only', sub:'Every provider is KYC verified by our team', icon:'✅', btn:'Learn More' },
-  { bg:'linear-gradient(135deg,#0f766e,#0d9488)', title:'31 districts covered', sub:'POWERSTAR serves all of Karnataka', icon:'📍', btn:'Check Area' },
-]
+import { ALL_SERVICES, MANPOWER, VEHICLES, RTO, FINANCIAL, Service } from '@/data/services'
+import { getCustomerBookings } from '@/services/api'
+import { Booking } from '@/types'
+import HeaderBar from '@/components/layout/HeaderBar'
 
 export default function CustomerHome() {
   const { profile } = useAuthStore()
   const nav = useNavigate()
-  const [bookings,  setBookings]  = useState<any[]>([])
-  const [loading,   setLoading]   = useState(true)
-  const [banner,    setBanner]    = useState(0)
+
+  const [searchQuery, setSearchQuery] = useState('')
+  const [selectedTypeFilter, setSelectedTypeFilter] = useState<'all' | 'manpower' | 'vehicle' | 'rto' | 'financial'>('all')
+  const [activeBookings, setActiveBookings] = useState<Booking[]>([])
+  const [loading, setLoading] = useState(true)
+
   const hour = new Date().getHours()
-  const greet = hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening'
-  const firstName = profile?.full_name?.split(' ')[0] ?? 'there'
+  const greeting = hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening'
+  const firstName = profile?.full_name?.split(' ')[0] || 'Friend'
 
   useEffect(() => {
     if (!profile?.id) return
-    supabase.from('bookings')
-      .select('*, category:service_categories(name,icon)')
-      .eq('customer_id', profile.id)
-      .order('created_at', { ascending: false })
-      .limit(5)
-      .then(({ data }) => { setBookings(data ?? []); setLoading(false) })
+    const fetchActive = async () => {
+      setLoading(true)
+      const data = await getCustomerBookings(profile.id)
+      const ongoing = data.filter(b =>
+        ['pending_admin', 'provider_assigned', 'payment_pending', 'confirmed', 'in_progress'].includes(b.status)
+      )
+      setActiveBookings(ongoing)
+      setLoading(false)
+    }
+    fetchActive()
   }, [profile?.id])
 
-  // Banner auto-scroll
-  useEffect(() => {
-    const t = setInterval(() => setBanner(b => (b+1) % BANNERS.length), 4000)
-    return () => clearInterval(t)
-  }, [])
+  // Filter services by search & category
+  const filteredServices = ALL_SERVICES.filter(s => {
+    const matchesSearch =
+      s.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      s.desc.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      (s.nameKn && s.nameKn.includes(searchQuery))
+    const matchesType = selectedTypeFilter === 'all' || s.type === selectedTypeFilter
+    return matchesSearch && matchesType
+  })
 
-  const active    = bookings.filter(b => ['pending_admin','provider_assigned','payment_pending','payment_success','confirmed','in_progress'].includes(b.status))
-  const completed = bookings.filter(b => b.status === 'completed')
-  const totalSpent = completed.reduce((s,b) => s + (b.total_amount||0), 0)
+  // Quick category shortcuts
+  const CATEGORY_CARDS = [
+    { title: 'Electrician', icon: '⚡', slug: 'electrician', color: '#f59e0b', bg: '#fef3c7', tag: 'Fast 30m' },
+    { title: 'Plumbing', icon: '🔧', slug: 'plumber', color: '#3b82f6', bg: '#dbeafe', tag: 'Popular' },
+    { title: 'Cleaning', icon: '🧹', slug: 'cleaning', color: '#10b981', bg: '#d1fae5', tag: 'Deep Clean' },
+    { title: 'Masonry', icon: '🧱', slug: 'mason', color: '#8b5cf6', bg: '#ede9fe', tag: 'Verified' },
+    { title: 'Tata Ace', icon: '🚐', slug: 'tata-ace', color: '#f97316', bg: '#ffedd5', tag: '750kg Goods' },
+    { title: 'Driver', icon: '🚗', slug: 'driver', color: '#06b6d4', bg: '#cffafe', tag: '24x7 Available' },
+    { title: 'Construction', icon: '👷', slug: 'construction', color: '#6366f1', bg: '#e0e7ff', tag: 'Labor' },
+    { title: 'All Services', icon: '✨', slug: 'all', color: '#ec4899', bg: '#fce7f3', tag: '37+ Categories' },
+  ]
+
+  // Promotional Banners
+  const OFFERS = [
+    {
+      title: 'Powerstar Verified Pros',
+      subtitle: 'Technicians assigned by admin based on skill & location',
+      cta: 'Explore Services',
+      bg: 'from-navy-900 to-navy-800 text-white border-navy-700',
+      tag: 'Guaranteed Matching',
+      icon: ShieldCheck
+    },
+    {
+      title: '100% Secure UPI Checkout',
+      subtitle: 'Pay via Google Pay, PhonePe, Paytm or BHIM after provider assignment',
+      cta: 'Book Now',
+      bg: 'from-brand-600 to-brand-700 text-white border-brand-500',
+      tag: 'Zero Convenience Fees',
+      icon: Zap
+    }
+  ]
 
   return (
-    <div style={{ background:'var(--bg)', minHeight:'100vh' }}>
+    <div className="min-h-screen bg-slate-50 dark:bg-navy-950 pb-20 lg:pb-10">
+      <HeaderBar showLocation={true} />
 
-      {/* ── HEADER ── */}
-      <div style={{ background:'linear-gradient(135deg,#1e293b,#0f172a)', padding:'20px 20px 28px', position:'relative', overflow:'hidden' }}>
-        <div style={{ position:'absolute', top:-40, right:-40, width:160, height:160, background:'rgba(249,115,22,0.12)', borderRadius:'50%', filter:'blur(40px)' }} />
-        <div style={{ position:'absolute', bottom:-30, left:-30, width:120, height:120, background:'rgba(37,99,235,0.1)', borderRadius:'50%', filter:'blur(30px)' }} />
-        <div style={{ position:'relative', zIndex:1 }}>
-          <div style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-start', marginBottom:16 }}>
-            <div>
-              <p style={{ fontSize:12, color:'rgba(255,255,255,0.6)', marginBottom:3 }}>{greet} 👋</p>
-              <h1 style={{ fontSize:22, fontWeight:800, color:'#fff', fontFamily:'Plus Jakarta Sans,sans-serif' }}>{firstName}</h1>
-              <p style={{ fontSize:12, color:'rgba(255,255,255,0.5)', marginTop:3 }}>📍 {profile?.district || 'Karnataka'}</p>
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 pt-4 space-y-6">
+        {/* ── 1. GREETING & HERO SEARCH SECTION ── */}
+        <section className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-navy-900 via-navy-800 to-navy-950 text-white p-6 sm:p-8 shadow-xl border border-navy-700/60">
+          <div className="absolute top-0 right-0 w-80 h-80 bg-brand-500/10 rounded-full blur-3xl pointer-events-none" />
+          <div className="absolute bottom-0 left-10 w-60 h-60 bg-primary-500/10 rounded-full blur-2xl pointer-events-none" />
+
+          <div className="relative z-10 max-w-2xl">
+            <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-brand-500/20 border border-brand-500/40 text-brand-400 text-xs font-semibold mb-3">
+              <Sparkles className="w-3.5 h-3.5" />
+              <span>{greeting}, {firstName} 👋</span>
             </div>
-            <div style={{ display:'flex', gap:10 }}>
-              {active.length > 0 && (
-                <button onClick={() => nav('/dashboard/track')}
-                  style={{ background:'rgba(249,115,22,0.2)', border:'1px solid rgba(249,115,22,0.4)', borderRadius:20, padding:'7px 14px', color:'#f97316', fontSize:11, fontWeight:700, cursor:'pointer', display:'flex', alignItems:'center', gap:5 }}>
-                  <div style={{ width:6, height:6, borderRadius:'50%', background:'#f97316', animation:'blink 1.2s ease-in-out infinite' }} />
-                  {active.length} Active
+
+            <h1 className="text-2xl sm:text-4xl font-extrabold tracking-tight font-display text-white mb-2 leading-tight">
+              What service do you need today?
+            </h1>
+            <p className="text-xs sm:text-sm text-slate-300 mb-6">
+              Book certified manpower, commercial vehicles, and home experts across Karnataka.
+            </p>
+
+            {/* Live Search Bar */}
+            <div className="relative">
+              <Search className="w-5 h-5 absolute left-4 top-3.5 text-slate-400" />
+              <input
+                type="text"
+                placeholder="Search plumbing, electrician, AC repair, cleaning, Tata Ace..."
+                value={searchQuery}
+                onChange={e => setSearchQuery(e.target.value)}
+                className="w-full pl-12 pr-4 py-3.5 rounded-2xl bg-white dark:bg-navy-800 text-slate-900 dark:text-white placeholder-slate-400 text-sm font-medium shadow-lg border border-transparent focus:border-brand-500 focus:outline-none transition-all"
+              />
+              {searchQuery && (
+                <button
+                  type="button"
+                  onClick={() => setSearchQuery('')}
+                  className="absolute right-4 top-3.5 text-xs text-slate-400 hover:text-slate-200"
+                >
+                  Clear
                 </button>
               )}
-              <button onClick={() => nav('/dashboard/profile')}
-                style={{ width:38, height:38, borderRadius:'50%', background:'rgba(255,255,255,0.1)', border:'1.5px solid rgba(255,255,255,0.2)', display:'flex', alignItems:'center', justifyContent:'center', fontSize:16, cursor:'pointer' }}>
-                👤
+            </div>
+          </div>
+        </section>
+
+        {/* ── 2. ACTIVE BOOKING LIVE TRACKING BANNER (IF ANY) ── */}
+        {activeBookings.length > 0 && (
+          <section className="space-y-3">
+            <div className="flex items-center justify-between">
+              <h2 className="text-sm font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                <span className="w-2.5 h-2.5 rounded-full bg-brand-500 pulse-badge" />
+                Active Service Requests ({activeBookings.length})
+              </h2>
+              <button
+                type="button"
+                onClick={() => nav('/dashboard/track')}
+                className="text-xs text-brand-600 dark:text-brand-400 font-semibold hover:underline flex items-center gap-1"
+              >
+                Track Live <ArrowRight className="w-3.5 h-3.5" />
               </button>
             </div>
-          </div>
 
-          {/* Search bar */}
-          <div onClick={() => nav('/dashboard/book')}
-            style={{ background:'rgba(255,255,255,0.1)', backdropFilter:'blur(10px)', borderRadius:12, padding:'12px 16px', display:'flex', alignItems:'center', gap:10, cursor:'pointer', border:'1px solid rgba(255,255,255,0.15)' }}>
-            <span style={{ fontSize:16 }}>🔍</span>
-            <span style={{ fontSize:14, color:'rgba(255,255,255,0.6)' }}>Search electrician, plumber, mason...</span>
-          </div>
-        </div>
-      </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              {activeBookings.slice(0, 2).map(bk => (
+                <div
+                  key={bk.id}
+                  onClick={() => nav('/dashboard/track')}
+                  className="p-4 rounded-2xl bg-white dark:bg-navy-900 border border-brand-500/30 shadow-card hover:border-brand-500 transition-all cursor-pointer flex items-center justify-between gap-3 group"
+                >
+                  <div className="flex items-center gap-3">
+                    <div className="w-11 h-11 rounded-xl bg-brand-500/10 text-brand-500 flex items-center justify-center text-xl flex-shrink-0">
+                      {bk.category?.icon || '⚡'}
+                    </div>
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <h4 className="font-bold text-xs sm:text-sm text-slate-900 dark:text-white">
+                          {bk.category?.name || 'Powerstar Service'}
+                        </h4>
+                        <span className="text-[10px] font-mono text-slate-400">#{bk.booking_ref}</span>
+                      </div>
+                      <p className="text-xs font-semibold mt-0.5 text-brand-600 dark:text-brand-400">
+                        {bk.status === 'pending_admin' && '⏳ Powerstar matching your technician…'}
+                        {bk.status === 'provider_assigned' && '👷 Provider Assigned! Tap to pay via UPI'}
+                        {bk.status === 'payment_pending' && '💳 Payment Required via UPI'}
+                        {bk.status === 'confirmed' && '✅ Booking Confirmed • Scheduled'}
+                        {bk.status === 'in_progress' && '🔧 Service In Progress'}
+                      </p>
+                    </div>
+                  </div>
 
-      <div style={{ padding:'0 16px', marginTop:-8 }}>
-
-        {/* Stats strip */}
-        <div style={{ display:'grid', gridTemplateColumns:'repeat(3,1fr)', gap:10, marginBottom:20 }}>
-          {[
-            { icon:'📋', val: bookings.length || 0, label:'Bookings', color:'#f97316' },
-            { icon:'✅', val: completed.length || 0, label:'Completed', color:'#16a34a' },
-            { icon:'💰', val: totalSpent > 0 ? '₹'+Math.round(totalSpent/1000)+'K' : '₹0', label:'Spent', color:'#2563eb' },
-          ].map((s,i) => (
-            <div key={i} style={{ background:'var(--card)', borderRadius:14, padding:'14px 12px', textAlign:'center', border:'1px solid var(--border)', boxShadow:'0 2px 8px rgba(0,0,0,0.06)' }}>
-              <p style={{ fontSize:20, marginBottom:4 }}>{s.icon}</p>
-              <p style={{ fontSize:18, fontWeight:800, color:s.color, fontFamily:'Plus Jakarta Sans,sans-serif' }}>{s.val}</p>
-              <p style={{ fontSize:10, color:'var(--text3)', marginTop:2 }}>{s.label}</p>
+                  <div className="flex items-center gap-2">
+                    <span className="font-extrabold text-xs text-slate-900 dark:text-white">
+                      ₹{bk.total_amount}
+                    </span>
+                    <ChevronRight className="w-4 h-4 text-slate-400 group-hover:text-brand-500 transition-transform group-hover:translate-x-1" />
+                  </div>
+                </div>
+              ))}
             </div>
-          ))}
-        </div>
-
-        {/* Active booking alert */}
-        {active.length > 0 && (
-          <div onClick={() => nav('/dashboard/track')}
-            style={{ background:'linear-gradient(135deg,rgba(249,115,22,0.12),rgba(234,88,12,0.06))', border:'1.5px solid rgba(249,115,22,0.3)', borderRadius:16, padding:16, marginBottom:20, cursor:'pointer', display:'flex', alignItems:'center', gap:14 }}>
-            <div style={{ width:44, height:44, borderRadius:12, background:'rgba(249,115,22,0.15)', display:'flex', alignItems:'center', justifyContent:'center', fontSize:22, flexShrink:0 }}>
-              {active[0]?.category?.icon ?? '🔧'}
-            </div>
-            <div style={{ flex:1, minWidth:0 }}>
-              <p style={{ fontWeight:800, fontSize:14, color:'var(--brand)' }}>Active Booking</p>
-              <p style={{ fontSize:12, color:'var(--text2)', marginTop:2, whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' }}>
-                {active[0]?.category?.name} · {active[0]?.district}
-              </p>
-            </div>
-            <div style={{ display:'flex', alignItems:'center', gap:5, flexShrink:0 }}>
-              <div className="live-dot" style={{ width:7, height:7 }} />
-              <span style={{ fontSize:12, color:'var(--brand)', fontWeight:700 }}>Track →</span>
-            </div>
-          </div>
+          </section>
         )}
 
-        {/* Promo banner (Horizontal Swipe) */}
-        <div className="h-scroll" style={{ marginBottom:22 }}>
-          {BANNERS.map((b, i) => (
-            <div key={i} className="h-scroll-item" style={{
-              width: '85vw', maxWidth: 340, height: 110, background: b.bg, borderRadius: 16,
-              padding: 20, display: 'flex', alignItems: 'center', gap: 16,
-            }}>
-              <span style={{ fontSize:36, flexShrink:0 }}>{b.icon}</span>
-              <div style={{ flex:1 }}>
-                <p style={{ fontWeight:800, fontSize:15, color:'#fff', marginBottom:3 }}>{b.title}</p>
-                <p style={{ fontSize:12, color:'rgba(255,255,255,0.8)', marginBottom:8 }}>{b.sub}</p>
-                <span style={{ background:'rgba(255,255,255,0.25)', borderRadius:20, padding:'3px 12px', fontSize:11, fontWeight:700, color:'#fff' }}>{b.btn}</span>
-              </div>
+        {/* ── 3. POPULAR CATEGORIES HORIZONTAL & GRID ── */}
+        <section className="space-y-3">
+          <div className="flex items-center justify-between">
+            <div>
+              <h2 className="text-base sm:text-lg font-bold text-slate-900 dark:text-white font-display">
+                Explore Categories
+              </h2>
+              <p className="text-xs text-slate-500 dark:text-slate-400">
+                Verified professionals assigned by Powerstar admin
+              </p>
             </div>
-          ))}
-        </div>
-
-        {/* Quick services */}
-        <div style={{ marginBottom:22 }}>
-          <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:14 }}>
-            <h2 style={{ fontWeight:800, fontSize:16, fontFamily:'Plus Jakarta Sans,sans-serif' }}>Book a Service</h2>
-            <button className="btn btn-ghost btn-sm" onClick={() => nav('/dashboard/book')} style={{ fontSize:12 }}>See all →</button>
+            <button
+              type="button"
+              onClick={() => nav('/dashboard/book')}
+              className="text-xs font-bold text-brand-500 hover:text-brand-600 flex items-center gap-1"
+            >
+              See All <ChevronRight className="w-3.5 h-3.5" />
+            </button>
           </div>
-          <div className="h-scroll">
-            {QUICK_SERVICES.map((s, i) => (
-              <div key={i} className="h-scroll-item" onClick={() => nav('/dashboard/book')}
-                style={{ width:84, background:'var(--card)', borderRadius:14, padding:'14px 8px', textAlign:'center', cursor:'pointer', border:'1px solid var(--border)', transition:'all 0.2s', boxShadow:'0 1px 4px rgba(0,0,0,0.04)' }}
-                onMouseEnter={e => { const el=e.currentTarget as HTMLElement; el.style.transform='translateY(-2px)'; el.style.boxShadow='0 4px 12px rgba(0,0,0,0.1)' }}
-                onMouseLeave={e => { const el=e.currentTarget as HTMLElement; el.style.transform=''; el.style.boxShadow='0 1px 4px rgba(0,0,0,0.04)' }}>
-                <div style={{ width:40, height:40, borderRadius:12, background:s.bg, display:'flex', alignItems:'center', justifyContent:'center', fontSize:20, margin:'0 auto 8px' }}>
-                  {s.icon}
+
+          <div className="grid grid-cols-4 sm:grid-cols-4 md:grid-cols-8 gap-2.5 sm:gap-3.5">
+            {CATEGORY_CARDS.map(cat => (
+              <div
+                key={cat.slug}
+                onClick={() => {
+                  if (cat.slug === 'all') {
+                    nav('/dashboard/book')
+                  } else {
+                    nav(`/dashboard/book?category=${cat.slug}`)
+                  }
+                }}
+                className="group flex flex-col items-center p-3 sm:p-4 rounded-2xl bg-white dark:bg-navy-900 border border-slate-200/80 dark:border-navy-800 hover:border-brand-500/60 shadow-subtle hover:shadow-card transition-all cursor-pointer text-center active:scale-95"
+              >
+                <div
+                  className="w-12 h-12 rounded-2xl flex items-center justify-center text-2xl mb-2 transition-transform group-hover:scale-110 shadow-sm"
+                  style={{ backgroundColor: cat.bg }}
+                >
+                  <span>{cat.icon}</span>
                 </div>
-                <p style={{ fontSize:10, fontWeight:600, color:'var(--text)', lineHeight:1.2 }}>{s.name}</p>
+                <h3 className="font-bold text-xs text-slate-800 dark:text-slate-200 truncate w-full">
+                  {cat.title}
+                </h3>
+                <span className="text-[10px] text-slate-400 font-medium truncate w-full mt-0.5">
+                  {cat.tag}
+                </span>
               </div>
             ))}
           </div>
-        </div>
+        </section>
 
-        {/* Recent bookings */}
-        <div style={{ marginBottom:24 }}>
-          <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:14 }}>
-            <h2 style={{ fontWeight:800, fontSize:16, fontFamily:'Plus Jakarta Sans,sans-serif' }}>Recent Bookings</h2>
-            <button className="btn btn-ghost btn-sm" onClick={() => nav('/dashboard/bookings')} style={{ fontSize:12 }}>View all →</button>
-          </div>
-
-          {loading ? (
-            <div style={{ display:'flex', flexDirection:'column', gap:10 }}>
-              {[1,2,3].map(i => (
-                <div key={i} style={{ background:'var(--card)', borderRadius:14, padding:16, height:76, border:'1px solid var(--border)', animation:'shimmer 1.5s ease infinite' }} />
-              ))}
-            </div>
-          ) : bookings.length === 0 ? (
-            <div style={{ background:'var(--card)', borderRadius:16, padding:'32px 20px', textAlign:'center', border:'1px solid var(--border)' }}>
-              <p style={{ fontSize:40, marginBottom:12 }}>🛠️</p>
-              <p style={{ fontWeight:700, fontSize:15, marginBottom:6 }}>No bookings yet</p>
-              <p style={{ color:'var(--text2)', fontSize:13, marginBottom:16 }}>Book your first service and get it done today!</p>
-              <button className="btn btn-brand" style={{ width:'100%', padding:'12px', borderRadius:12 }} onClick={() => nav('/dashboard/book')}>
-                + Book a Service
-              </button>
-            </div>
-          ) : (
-            <div style={{ display:'flex', flexDirection:'column', gap:10 }}>
-              {bookings.map((b:any) => (
-                <div key={b.id}
-                  onClick={() => ['pending_admin','provider_assigned','payment_pending','payment_success','confirmed','in_progress'].includes(b.status) ? nav('/dashboard/track') : nav('/dashboard/bookings')}
-                  style={{ background:'var(--card)', borderRadius:14, padding:16, border:'1px solid var(--border)', display:'flex', alignItems:'center', gap:14, cursor:'pointer', transition:'all 0.15s' }}
-                  onMouseEnter={e => (e.currentTarget as HTMLElement).style.borderColor='rgba(249,115,22,0.3)'}
-                  onMouseLeave={e => (e.currentTarget as HTMLElement).style.borderColor='var(--border)'}>
-                  <div style={{ width:46, height:46, borderRadius:13, background:'rgba(249,115,22,0.08)', border:'1.5px solid rgba(249,115,22,0.15)', display:'flex', alignItems:'center', justifyContent:'center', fontSize:22, flexShrink:0 }}>
-                    {b.category?.icon ?? '🔧'}
-                  </div>
-                  <div style={{ flex:1, minWidth:0 }}>
-                    <p style={{ fontWeight:700, fontSize:14, whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' }}>{b.category?.name ?? 'Service'}</p>
-                    <p style={{ fontSize:11, color:'var(--text2)', marginTop:3 }}>
-                      {new Date(b.created_at).toLocaleDateString('en-IN',{day:'numeric',month:'short',year:'2-digit'})} · {b.district}
-                    </p>
-                  </div>
-                  <div style={{ textAlign:'right', flexShrink:0 }}>
-                    <p style={{ fontWeight:800, fontSize:14, color:'var(--brand)', marginBottom:4 }}>₹{(b.total_amount||0).toLocaleString('en-IN')}</p>
-                    <StatusBadge status={b.status} />
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-
-        {/* Help section */}
-        <div style={{ background:'var(--card)', borderRadius:16, padding:16, marginBottom:28, border:'1px solid var(--border)' }}>
-          <p style={{ fontWeight:700, fontSize:14, marginBottom:14 }}>Need help?</p>
-          <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:10 }}>
+        {/* ── 4. FILTER TABS & SERVICE CATALOG SEARCH ── */}
+        <section className="space-y-4">
+          <div className="flex items-center justify-between gap-2 overflow-x-auto no-scrollbar py-1">
             {[
-              { icon:'📞', label:'Call Support', action:()=>window.open('tel:+918045678900') },
-              { icon:'💬', label:'Chat with us', action:()=>{} },
-              { icon:'❓', label:'How it works', action:()=>{} },
-              { icon:'⭐', label:'Rate our app', action:()=>{} },
-            ].map((h,i)=>(
-              <button key={i} onClick={h.action}
-                style={{ display:'flex', alignItems:'center', gap:10, padding:'12px', borderRadius:12, background:'var(--bg2)', border:'1px solid var(--border)', cursor:'pointer', fontFamily:'Inter,sans-serif', textAlign:'left' }}>
-                <span style={{ fontSize:18 }}>{h.icon}</span>
-                <span style={{ fontSize:12, fontWeight:600, color:'var(--text)' }}>{h.label}</span>
+              { id: 'all', label: 'All Services (42)' },
+              { id: 'manpower', label: '👷 Manpower & Labor (20)' },
+              { id: 'vehicle', label: '🚛 Vehicles & Logistics (13)' },
+              { id: 'rto', label: '📋 RTO & Legal (5)' },
+              { id: 'financial', label: '💰 Financial (4)' },
+            ].map(tab => (
+              <button
+                key={tab.id}
+                type="button"
+                onClick={() => setSelectedTypeFilter(tab.id as any)}
+                className={`px-3.5 py-2 rounded-xl text-xs font-semibold whitespace-nowrap transition-all ${
+                  selectedTypeFilter === tab.id
+                    ? 'bg-brand-500 text-white shadow-brand font-bold'
+                    : 'bg-white dark:bg-navy-900 text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-navy-800 hover:border-slate-300'
+                }`}
+              >
+                {tab.label}
               </button>
             ))}
           </div>
-        </div>
 
-      </div>
+          {/* Service Cards Grid */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            {filteredServices.slice(0, 9).map(service => (
+              <div
+                key={service.id}
+                onClick={() => nav(`/dashboard/book?category=${service.id}`)}
+                className="p-4 sm:p-5 rounded-2xl bg-white dark:bg-navy-900 border border-slate-200/80 dark:border-navy-800 hover:border-brand-500/60 shadow-card hover:shadow-card-hover transition-all cursor-pointer flex flex-col justify-between group"
+              >
+                <div>
+                  <div className="flex items-start justify-between gap-3 mb-3">
+                    <div className="flex items-center gap-3">
+                      <div className="w-12 h-12 rounded-2xl bg-slate-100 dark:bg-navy-800 flex items-center justify-center text-2xl group-hover:scale-105 transition-transform flex-shrink-0">
+                        {service.icon}
+                      </div>
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <h3 className="font-bold text-sm text-slate-900 dark:text-white group-hover:text-brand-500 transition-colors">
+                            {service.name}
+                          </h3>
+                          {service.available24h && (
+                            <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">
+                              24/7
+                            </span>
+                          )}
+                        </div>
+                        {service.nameKn && (
+                          <p className="text-[11px] text-slate-400 font-medium">{service.nameKn}</p>
+                        )}
+                      </div>
+                    </div>
+                  </div>
 
-      <style>{`
-        @keyframes blink{0%,100%{opacity:1}50%{opacity:0.2}}
-        @keyframes shimmer{0%,100%{opacity:1}50%{opacity:0.5}}
-      `}</style>
+                  <p className="text-xs text-slate-500 dark:text-slate-400 line-clamp-2 mb-4">
+                    {service.desc}
+                  </p>
+                </div>
+
+                <div className="pt-3 border-t border-slate-100 dark:border-navy-800 flex items-center justify-between">
+                  <div>
+                    <span className="text-[10px] text-slate-400 uppercase font-semibold block">Starting from</span>
+                    <span className="text-sm font-extrabold text-slate-900 dark:text-white">
+                      ₹{service.basePrice}{service.unit}
+                    </span>
+                  </div>
+
+                  <button
+                    type="button"
+                    className="px-3.5 py-1.5 rounded-xl bg-brand-50 dark:bg-brand-500/10 text-brand-600 dark:text-brand-400 text-xs font-bold group-hover:bg-brand-500 group-hover:text-white transition-all flex items-center gap-1"
+                  >
+                    <span>Book</span>
+                    <ArrowRight className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </section>
+
+        {/* ── 5. VALUE PROPOSITIONS & TRUST BANNER ── */}
+        <section className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2">
+          {OFFERS.map((offer, idx) => {
+            const Icon = offer.icon
+            return (
+              <div
+                key={idx}
+                className={`p-6 rounded-3xl bg-gradient-to-br ${offer.bg} border shadow-lg relative overflow-hidden flex flex-col justify-between`}
+              >
+                <div className="relative z-10">
+                  <div className="flex items-center gap-2 mb-3">
+                    <span className="text-xs font-bold px-2.5 py-0.5 rounded-full bg-white/20 uppercase tracking-wider">
+                      {offer.tag}
+                    </span>
+                  </div>
+                  <h3 className="text-lg sm:text-xl font-bold font-display mb-1">{offer.title}</h3>
+                  <p className="text-xs text-slate-200 mb-4 max-w-sm">{offer.subtitle}</p>
+                </div>
+
+                <div className="flex items-center justify-between relative z-10">
+                  <button
+                    type="button"
+                    onClick={() => nav('/dashboard/book')}
+                    className="px-4 py-2 rounded-xl bg-white text-slate-900 font-bold text-xs hover:bg-slate-100 transition-colors shadow-sm"
+                  >
+                    {offer.cta}
+                  </button>
+                  <Icon className="w-12 h-12 text-white/20" />
+                </div>
+              </div>
+            )
+          })}
+        </section>
+
+        {/* ── 6. POWERSTAR WORKFLOW REASSURANCE ── */}
+        <section className="p-6 rounded-3xl bg-white dark:bg-navy-900 border border-slate-200 dark:border-navy-800 shadow-card space-y-4">
+          <div className="text-center max-w-lg mx-auto">
+            <h3 className="font-bold text-base text-slate-900 dark:text-white">
+              How Powerstar On-Demand Works
+            </h3>
+            <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+              Guaranteed technician quality through verified admin matching
+            </p>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-4 gap-3 text-center">
+            {[
+              { step: '1', title: 'Submit Request', desc: 'Pick service, select time and address', icon: '📝' },
+              { step: '2', title: 'Admin Match', desc: 'Powerstar assigns verified local pro', icon: '👷' },
+              { step: '3', title: 'UPI Payment', desc: 'Pay securely after pro is assigned', icon: '⚡' },
+              { step: '4', title: 'Job Done', desc: 'Verified service & OTP confirmation', icon: '⭐' },
+            ].map(item => (
+              <div key={item.step} className="p-3.5 rounded-2xl bg-slate-50 dark:bg-navy-800/50 border border-slate-200/60 dark:border-navy-700/60">
+                <span className="text-2xl mb-1 block">{item.icon}</span>
+                <span className="text-[10px] font-bold text-brand-500 font-mono">STEP {item.step}</span>
+                <h4 className="font-bold text-xs text-slate-900 dark:text-white mt-0.5">{item.title}</h4>
+                <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">{item.desc}</p>
+              </div>
+            ))}
+          </div>
+        </section>
+      </main>
     </div>
   )
 }

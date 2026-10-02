@@ -1,109 +1,189 @@
-import { useState } from 'react'
-import PageHeader from '@/components/layout/PageHeader'
-import { supabase } from '@/lib/supabase'
-import { useAuthStore } from '@/store/authStore'
+import React, { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { Settings, Save, Shield, DollarSign, Phone, Mail, LogOut, CheckCircle2, Lock } from 'lucide-react'
+import { useAuthStore } from '@/store/authStore'
+import { authService } from '@/services/authService'
+import HeaderBar from '@/components/layout/HeaderBar'
 import toast from 'react-hot-toast'
 
 export default function AdminSettings() {
   const nav = useNavigate()
   const { reset } = useAuthStore()
-  const [s, setS] = useState({
-    platform_name:'POWERSTAR', support_phone:'+91 80 4567 8900',
-    support_email:'support@powerstar.in', platform_fee:'5',
-    gst_percent:'18', settlement_hours:'24',
-    sms_provider:'MSG91', push_provider:'Firebase FCM',
-    razorpay_key:'rzp_live_xxxxxxxxxx', min_booking:'100',
-  })
-  const set = (k:string)=>(e:React.ChangeEvent<HTMLInputElement|HTMLSelectElement>)=>setS(v=>({...v,[k]:e.target.value}))
 
-  async function logout() {
-    await supabase.auth.signOut()
+  const [settings, setSettings] = useState({
+    platform_name: 'POWERSTAR',
+    support_phone: '+91 80 4567 8900',
+    support_email: 'support@powerstar.in',
+    platform_fee_percent: '5',
+    gst_percent: '18',
+    settlement_hours: '24',
+    min_booking_amount: '100',
+    payment_mode: 'UPI Only (NPCI Auto-Verify)',
+    active_districts_count: '31'
+  })
+  const [saving, setSaving] = useState(false)
+
+  const handleChange = (key: string, val: string) => {
+    setSettings(prev => ({ ...prev, [key]: val }))
+  }
+
+  async function handleSave(e: React.FormEvent) {
+    e.preventDefault()
+    setSaving(true)
+    setTimeout(() => {
+      setSaving(false)
+      toast.success('Platform settings updated successfully!')
+    }, 600)
+  }
+
+  async function handleLogout() {
+    await authService.signOut()
     reset()
-    nav('/')
     toast.success('Logged out successfully')
+    nav('/')
   }
 
   return (
-    <div>
-      <PageHeader title="Platform Settings" subtitle="Global configuration for POWERSTAR" />
-      <div className="page-content" style={{maxWidth:640}}>
-        {[
-          { title:'General', fields:[
-            {k:'platform_name',label:'Platform Name',type:'text'},
-            {k:'support_phone',label:'Support Phone',type:'text'},
-            {k:'support_email',label:'Support Email',type:'email'},
-          ]},
-          { title:'Financial', fields:[
-            {k:'platform_fee',label:'Platform Fee (%)',type:'number'},
-            {k:'gst_percent', label:'GST (%)',          type:'number'},
-            {k:'settlement_hours',label:'Settlement (hours)',type:'number'},
-            {k:'min_booking', label:'Min Booking (₹)', type:'number'},
-          ]},
-          { title:'Integrations', fields:[
-            {k:'razorpay_key',label:'Razorpay Key ID',type:'text'},
-          ]},
-        ].map(section=>(
-          <div key={section.title} className="glass" style={{padding:24,marginBottom:16}}>
-            <h3 style={{fontWeight:700,fontSize:15,marginBottom:18,paddingBottom:12,borderBottom:'1px solid var(--border)'}}>{section.title}</h3>
-            <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:14}}>
-              {section.fields.map(f=>(
-                <div key={f.k}>
-                  <label className="input-label">{f.label}</label>
-                  <input className="input" type={f.type} value={(s as any)[f.k]} onChange={set(f.k)} />
+    <div className="min-h-screen bg-slate-50 dark:bg-navy-950 pb-24 lg:pb-12">
+      <HeaderBar title="Platform Settings" subtitle="Configure commission fees, tax rates & platform support" showLocation={false} />
+
+      <main className="max-w-3xl mx-auto px-4 sm:px-6 pt-5 space-y-5">
+        <form onSubmit={handleSave} className="space-y-5">
+          {/* General Settings */}
+          <div className="p-6 rounded-3xl bg-white dark:bg-navy-900 border border-slate-200/80 dark:border-navy-800 shadow-card space-y-4">
+            <h3 className="font-bold text-sm text-slate-900 dark:text-white pb-2 border-b border-slate-100 dark:border-navy-800 flex items-center gap-2">
+              <Settings className="w-4 h-4 text-brand-500" />
+              <span>General Platform Info</span>
+            </h3>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5">
+                  Platform Name
+                </label>
+                <input
+                  type="text"
+                  value={settings.platform_name}
+                  onChange={e => handleChange('platform_name', e.target.value)}
+                  className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 dark:border-navy-700 bg-slate-50 dark:bg-navy-800 text-xs text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-brand-500 font-bold"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5">
+                  Active Karnataka Districts
+                </label>
+                <input
+                  type="text"
+                  readOnly
+                  value="31 Districts (All Covered)"
+                  className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 dark:border-navy-700 bg-slate-100 dark:bg-navy-800/50 text-xs text-slate-500 font-medium"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5">
+                  Support Helpline Phone
+                </label>
+                <input
+                  type="text"
+                  value={settings.support_phone}
+                  onChange={e => handleChange('support_phone', e.target.value)}
+                  className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 dark:border-navy-700 bg-slate-50 dark:bg-navy-800 text-xs text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-brand-500 font-mono"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5">
+                  Support Email Address
+                </label>
+                <input
+                  type="email"
+                  value={settings.support_email}
+                  onChange={e => handleChange('support_email', e.target.value)}
+                  className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 dark:border-navy-700 bg-slate-50 dark:bg-navy-800 text-xs text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-brand-500"
+                />
+              </div>
+            </div>
+          </div>
+
+          {/* Financial & UPI Rules */}
+          <div className="p-6 rounded-3xl bg-white dark:bg-navy-900 border border-slate-200/80 dark:border-navy-800 shadow-card space-y-4">
+            <h3 className="font-bold text-sm text-slate-900 dark:text-white pb-2 border-b border-slate-100 dark:border-navy-800 flex items-center gap-2">
+              <DollarSign className="w-4 h-4 text-emerald-500" />
+              <span>Financial & UPI Commissions</span>
+            </h3>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5">
+                  Platform Commission Fee (%)
+                </label>
+                <input
+                  type="number"
+                  value={settings.platform_fee_percent}
+                  onChange={e => handleChange('platform_fee_percent', e.target.value)}
+                  className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 dark:border-navy-700 bg-slate-50 dark:bg-navy-800 text-xs text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-brand-500 font-bold"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5">
+                  GST on Fee (%)
+                </label>
+                <input
+                  type="number"
+                  value={settings.gst_percent}
+                  onChange={e => handleChange('gst_percent', e.target.value)}
+                  className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 dark:border-navy-700 bg-slate-50 dark:bg-navy-800 text-xs text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-brand-500 font-bold"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5">
+                  Partner Payout Share
+                </label>
+                <input
+                  type="text"
+                  readOnly
+                  value="90% of Base Fee"
+                  className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 dark:border-navy-700 bg-slate-100 dark:bg-navy-800/50 text-xs text-slate-500 font-medium"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5">
+                  Payment Gateway Policy
+                </label>
+                <div className="p-2.5 rounded-xl bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-500/30 text-emerald-700 dark:text-emerald-300 text-xs font-semibold flex items-center gap-2">
+                  <Lock className="w-3.5 h-3.5 text-emerald-500" />
+                  <span>UPI Only (GPay, PhonePe, Paytm, BHIM)</span>
                 </div>
-              ))}
+              </div>
             </div>
           </div>
-        ))}
 
-        <div className="glass" style={{padding:24,marginBottom:20}}>
-          <h3 style={{fontWeight:700,fontSize:15,marginBottom:18,paddingBottom:12,borderBottom:'1px solid var(--border)'}}>Notifications</h3>
-          <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:14}}>
-            <div>
-              <label className="input-label">SMS Provider</label>
-              <select className="input" value={s.sms_provider} onChange={set('sms_provider')}>
-                <option>MSG91</option><option>Twilio</option><option>Exotel</option>
-              </select>
-            </div>
-            <div>
-              <label className="input-label">Push Notifications</label>
-              <select className="input" value={s.push_provider} onChange={set('push_provider')}>
-                <option>Firebase FCM</option><option>OneSignal</option>
-              </select>
-            </div>
-          </div>
-        </div>
-
-        <div style={{ display:'flex', gap:10, marginBottom:20 }}>
-          <button className="btn btn-brand" style={{flex:2}} onClick={()=>toast.success('Settings saved successfully!')}>
-            Save All Settings
-          </button>
-        </div>
-
-        {/* ── MOBILE MENU LINKS ── */}
-        <div className="glass" style={{ display:'flex', flexDirection:'column', marginBottom: 40 }}>
-          {[
-            { icon:'👥', label:'Customers',   path:'/admin/customers' },
-            { icon:'💳', label:'Payments',    path:'/admin/payments' },
-            { icon:'⚠️', label:'Disputes',    path:'/admin/disputes' },
-            { icon:'🏷️', label:'Services',    path:'/admin/services' },
-            { icon:'💰', label:'Pricing',     path:'/admin/pricing' },
-          ].map(link => (
-            <button key={link.label} onClick={() => nav(link.path)}
-              style={{ display:'flex', alignItems:'center', gap:14, padding:'18px 20px', borderBottom:'1px solid var(--border)', background:'transparent', borderTop:'none', borderLeft:'none', borderRight:'none', cursor:'pointer', textAlign:'left', color:'var(--text)' }}>
-              <span style={{ fontSize:20, width:24, textAlign:'center' }}>{link.icon}</span>
-              <span style={{ fontSize:15, fontWeight:600, flex:1 }}>{link.label}</span>
-              <span style={{ color:'var(--text3)' }}>›</span>
+          <div className="flex items-center justify-between pt-2">
+            <button
+              type="submit"
+              disabled={saving}
+              className="px-6 py-3 rounded-2xl bg-brand-500 hover:bg-brand-600 text-white font-bold text-xs shadow-brand flex items-center gap-2 transition-all disabled:opacity-50"
+            >
+              <Save className="w-4 h-4" />
+              <span>{saving ? 'Saving…' : 'Save Configuration'}</span>
             </button>
-          ))}
-          <button onClick={logout}
-            style={{ display:'flex', alignItems:'center', gap:14, padding:'18px 20px', background:'transparent', border:'none', cursor:'pointer', textAlign:'left', color:'#ef4444' }}>
-            <span style={{ fontSize:20, width:24, textAlign:'center' }}>🚪</span>
-            <span style={{ fontSize:15, fontWeight:700, flex:1 }}>Logout</span>
-          </button>
-        </div>
-      </div>
+
+            <button
+              type="button"
+              onClick={handleLogout}
+              className="px-4 py-2.5 rounded-xl bg-red-500/10 hover:bg-red-500/20 text-red-600 font-bold text-xs border border-red-500/30 transition-colors flex items-center gap-1.5"
+            >
+              <LogOut className="w-3.5 h-3.5" />
+              <span>Sign Out Admin</span>
+            </button>
+          </div>
+        </form>
+      </main>
     </div>
   )
 }

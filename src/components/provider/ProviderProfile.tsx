@@ -1,249 +1,246 @@
-import { useState, useEffect } from 'react'
+import React, { useState, useEffect } from 'react'
+import { useNavigate } from 'react-router-dom'
+import {
+  User,
+  Phone,
+  MapPin,
+  Save,
+  LogOut,
+  ShieldCheck,
+  Star,
+  Briefcase,
+  Moon,
+  Sun,
+  Globe,
+  Award
+} from 'lucide-react'
 import { useAuthStore } from '@/store/authStore'
-import { updateProfile } from '@/services/authService'
-import { supabase } from '@/lib/supabase'
-import PageHeader from '@/components/layout/PageHeader'
-import Avatar from '@/components/ui/Avatar'
+import { useThemeStore } from '@/store/themeStore'
+import { authService } from '@/services/authService'
 import { DISTRICTS, getCities } from '@/data/karnataka'
+import { supabase } from '@/lib/supabase'
+import HeaderBar from '@/components/layout/HeaderBar'
 import toast from 'react-hot-toast'
 
 export default function ProviderProfile() {
   const nav = useNavigate()
   const { profile, setProfile, reset } = useAuthStore()
-  const [saving,      setSaving]      = useState(false)
-  const [categories,  setCategories]  = useState<any[]>([])
-  const [myServices,  setMyServices]  = useState<any[]>([])
-  const [addingCat,   setAddingCat]   = useState('')
-  const [addingRate,  setAddingRate]  = useState('290')
-  const [addingExp,   setAddingExp]   = useState('3')
-  const [form, setForm] = useState({
-    full_name: profile?.full_name || '',
-    phone:     profile?.phone     || '',
-    district:  profile?.district  || 'Bengaluru Urban',
-    city:      profile?.city      || '',
-  })
+  const { isDark, toggleTheme } = useThemeStore()
 
-  const districtObj = DISTRICTS.find(d => d.name === form.district) || DISTRICTS[0]
+  const [fullName, setFullName] = useState(profile?.full_name || '')
+  const [phone, setPhone] = useState(profile?.phone || '')
+  const [district, setDistrict] = useState(profile?.district || 'Bengaluru Urban')
+  const [city, setCity] = useState(profile?.city || 'Koramangala')
+  const [bio, setBio] = useState('Certified electrician & appliance repair professional with 6+ years experience in Bengaluru.')
+  const [experience, setExperience] = useState('6')
+  const [saving, setSaving] = useState(false)
+
+  const districtObj = DISTRICTS.find(d => d.name === district) || DISTRICTS[0]
   const cities = getCities(districtObj.id)
-  const set = (k: string) => (e: React.ChangeEvent<HTMLInputElement|HTMLSelectElement>) =>
-    setForm(f => ({ ...f, [k]: e.target.value }))
 
-  useEffect(() => { loadData() }, [profile?.id]) // eslint-disable-line
-
-  async function loadData() {
-    if (!profile?.id) return
-    const [cats, svc] = await Promise.all([
-      supabase.from('service_categories')
-        .select('id,name,icon,type,base_price,price_unit')
-        .in('type', ['manpower','vehicle'])
-        .order('sort_order'),
-      supabase.from('provider_services')
-        .select('*, category:service_categories(name,icon,price_unit)')
-        .eq('provider_id', profile.id),
-    ])
-    setCategories(cats.data ?? [])
-    // If provider_services table doesn't exist yet, fall back to providers.category_id
-    if (svc.error && svc.error.code === '42P01') {
-      const { data: provRow } = await supabase
-        .from('providers').select('category_id, hourly_rate, experience_years, category:service_categories(name,icon,price_unit)')
-        .eq('id', profile.id).maybeSingle()
-      if (provRow?.category_id) {
-        setMyServices([{ id: 'legacy', category_id: provRow.category_id, hourly_rate: provRow.hourly_rate, experience_years: provRow.experience_years, category: provRow.category }])
-      }
-    } else {
-      setMyServices(svc.data ?? [])
-    }
-  }
-
-  async function addService() {
-    if (!profile?.id || !addingCat) { toast.error('Select a service'); return }
-    if (myServices.find(s => s.category_id === addingCat)) { toast.error('Service already added'); return }
-
-    // Try provider_services table first
-    const { error } = await supabase.from('provider_services').insert({
-      provider_id: profile.id, category_id: addingCat,
-      hourly_rate: Number(addingRate), experience_years: Number(addingExp),
-    })
-    if (error) {
-      // Table doesn't exist — update providers table directly
-      await supabase.from('providers').upsert({
-        id: profile.id, category_id: addingCat,
-        hourly_rate: Number(addingRate), experience_years: Number(addingExp),
-      }, { onConflict: 'id' })
-      toast.success('Service updated!')
-    } else {
-      // Also update primary category if first service
-      if (myServices.length === 0) {
-        await supabase.from('providers').upsert({
-          id: profile.id, category_id: addingCat, hourly_rate: Number(addingRate),
-        }, { onConflict: 'id' })
-      }
-      toast.success('Service added!')
-    }
-    setAddingCat('')
-    loadData()
-  }
-
-  async function removeService(id: string) {
-    if (id === 'legacy') { toast.error("Can't remove primary service — update it instead"); return }
-    await supabase.from('provider_services').delete().eq('id', id)
-    toast.success('Service removed')
-    loadData()
-  }
-
-  async function saveProfile() {
+  async function handleSave(e: React.FormEvent) {
+    e.preventDefault()
     if (!profile?.id) return
     setSaving(true)
     try {
-      const updated = await updateProfile(profile.id, form)
-      setProfile({ ...profile, ...updated })
-      // Also update provider district
-      await supabase.from('providers').upsert({ id: profile.id }, { onConflict: 'id' })
-      toast.success('Profile saved!')
-    } catch (err: any) { toast.error(err?.message || 'Save failed') }
-    finally { setSaving(false) }
+      await supabase
+        .from('profiles')
+        .update({
+          full_name: fullName,
+          phone,
+          district,
+          city,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', profile.id)
+
+      await supabase
+        .from('providers')
+        .update({
+          bio,
+          experience_years: parseInt(experience, 10) || 1
+        })
+        .eq('id', profile.id)
+
+      setProfile({
+        ...profile,
+        full_name: fullName,
+        phone,
+        district,
+        city
+      })
+      toast.success('Partner profile updated!')
+    } catch (err: any) {
+      toast.error(err?.message || 'Failed to update')
+    } finally {
+      setSaving(false)
+    }
   }
 
-  async function logout() {
-    await supabase.auth.signOut()
+  async function handleLogout() {
+    await authService.signOut()
     reset()
-    nav('/')
     toast.success('Logged out successfully')
+    nav('/')
   }
-
-  const usedCatIds = new Set(myServices.map(s => s.category_id))
-  const available  = categories.filter(c => !usedCatIds.has(c.id))
 
   return (
-    <div>
-      <PageHeader title="My Profile" subtitle="Manage your profile and services" />
-      <div className="page-content">
-        <div style={{ maxWidth: 600 }}>
+    <div className="min-h-screen bg-slate-50 dark:bg-navy-950 pb-24 lg:pb-12">
+      <HeaderBar title="Partner Profile & Trade" subtitle="Manage your trade specialization, service district & contact info" showLocation={false} />
 
-          {/* Avatar */}
-          <div className="glass" style={{ padding:20, marginBottom:16, display:'flex', alignItems:'center', gap:16 }}>
-            <Avatar name={profile?.full_name} size={60} color="#16a34a" />
-            <div>
-              <p style={{ fontWeight:800, fontSize:18 }}>{profile?.full_name}</p>
-              <span className="badge badge-green" style={{ marginTop:4, display:'inline-block' }}>Provider</span>
+      <main className="max-w-3xl mx-auto px-4 sm:px-6 pt-5 space-y-5">
+        {/* Profile Header */}
+        <div className="p-6 rounded-3xl bg-white dark:bg-navy-900 border border-slate-200/80 dark:border-navy-800 shadow-card flex items-center gap-4">
+          <div className="w-16 h-16 rounded-2xl bg-brand-500/10 border border-brand-500/30 text-brand-500 flex items-center justify-center font-extrabold text-2xl">
+            👷
+          </div>
+          <div>
+            <div className="flex items-center gap-2">
+              <h2 className="font-extrabold text-lg text-slate-900 dark:text-white">
+                {profile?.full_name || 'Powerstar Partner'}
+              </h2>
+              <ShieldCheck className="w-4 h-4 text-emerald-500" />
+            </div>
+            <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+              {profile?.phone || 'No phone'} • 📍 {profile?.district || 'Karnataka'}
+            </p>
+            <div className="flex items-center gap-2 mt-2">
+              <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20 uppercase tracking-wider">
+                Certified Partner
+              </span>
+              <span className="text-[10px] text-amber-500 font-bold flex items-center gap-1">
+                <Star className="w-3 h-3 fill-amber-400" /> 4.9 Rating
+              </span>
             </div>
           </div>
-
-          {/* Personal info */}
-          <div className="glass" style={{ padding:22, marginBottom:16 }}>
-            <h3 style={{ fontWeight:700, fontSize:14, marginBottom:16, paddingBottom:10, borderBottom:'1px solid var(--border)' }}>Personal Information</h3>
-            <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:14, marginBottom:14 }}>
-              <div><label className="input-label">Full Name</label><input className="input" value={form.full_name} onChange={set('full_name')} /></div>
-              <div><label className="input-label">Phone</label><input className="input" value={form.phone} onChange={set('phone')} placeholder="+91 98765 43210" /></div>
-              <div>
-                <label className="input-label">District (Service Area)</label>
-                <select className="input" value={form.district} onChange={e => { set('district')(e); setForm(f => ({...f, city:''})) }}>
-                  {DISTRICTS.map(d => <option key={d.id} value={d.name}>{d.name}</option>)}
-                </select>
-              </div>
-              <div>
-                <label className="input-label">City / Area</label>
-                <select className="input" value={form.city} onChange={set('city')}>
-                  <option value="">Select city</option>
-                  {cities.map(c => <option key={c} value={c}>{c}</option>)}
-                </select>
-              </div>
-            </div>
-            <button className="btn btn-brand" style={{ width:'100%' }} onClick={saveProfile} disabled={saving}>
-              {saving ? 'Saving...' : 'Save Profile'}
-            </button>
-          </div>
-
-          {/* My Services — multi-service management */}
-          <div className="glass" style={{ padding:22, marginBottom:16 }}>
-            <h3 style={{ fontWeight:700, fontSize:14, marginBottom:16, paddingBottom:10, borderBottom:'1px solid var(--border)' }}>
-              My Services <span style={{ fontSize:12, fontWeight:400, color:'var(--text3)' }}>({myServices.length} active)</span>
-            </h3>
-
-            {myServices.length === 0 ? (
-              <div style={{ textAlign:'center', padding:'20px 0', color:'var(--text3)', fontSize:13, marginBottom:16 }}>
-                No services yet. Add your first service below to start receiving bookings.
-              </div>
-            ) : (
-              <div style={{ display:'flex', flexDirection:'column', gap:10, marginBottom:18 }}>
-                {myServices.map((s:any) => (
-                  <div key={s.id} style={{ display:'flex', alignItems:'center', gap:12, padding:'12px 14px', background:'var(--bg2)', borderRadius:10, border:'1px solid var(--border)' }}>
-                    <span style={{ fontSize:24, flexShrink:0 }}>{s.category?.icon}</span>
-                    <div style={{ flex:1, minWidth:0 }}>
-                      <p style={{ fontWeight:700, fontSize:13 }}>{s.category?.name}</p>
-                      <p style={{ fontSize:12, color:'var(--text2)', marginTop:2 }}>
-                        ₹{s.hourly_rate}{s.category?.price_unit ?? '/hr'} · {s.experience_years} yr{s.experience_years > 1 ? 's' : ''} exp
-                      </p>
-                    </div>
-                    <div style={{ display:'flex', gap:8, flexShrink:0, alignItems:'center' }}>
-                      <span className="badge badge-green" style={{ fontSize:10 }}>Active</span>
-                      {s.id !== 'legacy' && (
-                        <button className="btn btn-danger btn-sm" onClick={() => removeService(s.id)}>✕</button>
-                      )}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-
-            {/* Add new service */}
-            {available.length > 0 && (
-              <div style={{ background:'var(--bg)', borderRadius:12, padding:16, border:'1.5px dashed var(--border)' }}>
-                <p style={{ fontWeight:700, fontSize:13, marginBottom:12 }}>+ Add Another Service</p>
-                <div style={{ display:'grid', gridTemplateColumns:'2fr 1fr 1fr', gap:10, marginBottom:10 }}>
-                  <div>
-                    <label className="input-label">Service</label>
-                    <select className="input" value={addingCat} onChange={e => setAddingCat(e.target.value)}>
-                      <option value="">Select...</option>
-                      {available.map(c => <option key={c.id} value={c.id}>{c.icon} {c.name}</option>)}
-                    </select>
-                  </div>
-                  <div>
-                    <label className="input-label">Rate (₹/hr)</label>
-                    <input className="input" type="number" min={50} value={addingRate} onChange={e => setAddingRate(e.target.value)} />
-                  </div>
-                  <div>
-                    <label className="input-label">Exp (yrs)</label>
-                    <select className="input" value={addingExp} onChange={e => setAddingExp(e.target.value)}>
-                      {[1,2,3,5,8,10,15,20].map(y => <option key={y} value={y}>{y}yr</option>)}
-                    </select>
-                  </div>
-                </div>
-                <button className="btn btn-brand" style={{ width:'100%' }} onClick={addService} disabled={!addingCat}>
-                  + Add Service
-                </button>
-              </div>
-            )}
-            {available.length === 0 && myServices.length > 0 && (
-              <p style={{ fontSize:12, color:'var(--text3)', textAlign:'center', marginTop:8 }}>All available services have been added.</p>
-            )}
-          </div>
-
-          {/* ── MOBILE MENU LINKS ── */}
-          <div className="glass" style={{ display:'flex', flexDirection:'column', marginTop: 16, marginBottom: 40 }}>
-            {[
-              { icon:'📩', label:'My Jobs',        path:'/provider/myjobs' },
-              { icon:'💰', label:'Earnings',       path:'/provider/earnings' },
-              { icon:'⭐', label:'Reviews',        path:'/provider/reviews' },
-              { icon:'🔔', label:'Notifications',  path:'/provider/notifications' },
-              { icon:'📞', label:'Help & Support', path:'/provider/support' },
-            ].map(link => (
-              <button key={link.label} onClick={() => nav(link.path)}
-                style={{ display:'flex', alignItems:'center', gap:14, padding:'18px 20px', borderBottom:'1px solid var(--border)', background:'transparent', borderTop:'none', borderLeft:'none', borderRight:'none', cursor:'pointer', textAlign:'left', color:'var(--text)' }}>
-                <span style={{ fontSize:20, width:24, textAlign:'center' }}>{link.icon}</span>
-                <span style={{ fontSize:15, fontWeight:600, flex:1 }}>{link.label}</span>
-                <span style={{ color:'var(--text3)' }}>›</span>
-              </button>
-            ))}
-            <button onClick={logout}
-              style={{ display:'flex', alignItems:'center', gap:14, padding:'18px 20px', background:'transparent', border:'none', cursor:'pointer', textAlign:'left', color:'#ef4444' }}>
-              <span style={{ fontSize:20, width:24, textAlign:'center' }}>🚪</span>
-              <span style={{ fontSize:15, fontWeight:700, flex:1 }}>Logout</span>
-            </button>
-          </div>
-
         </div>
-      </div>
+
+        {/* Profile Form */}
+        <form onSubmit={handleSave} className="p-6 rounded-3xl bg-white dark:bg-navy-900 border border-slate-200/80 dark:border-navy-800 shadow-card space-y-4">
+          <h3 className="font-bold text-sm text-slate-900 dark:text-white pb-2 border-b border-slate-100 dark:border-navy-800">
+            Professional Profile Details
+          </h3>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                Full Name
+              </label>
+              <input
+                type="text"
+                value={fullName}
+                onChange={e => setFullName(e.target.value)}
+                className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 dark:border-navy-700 bg-slate-50 dark:bg-navy-800 text-xs text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-brand-500 font-medium"
+              />
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                Contact Phone
+              </label>
+              <input
+                type="tel"
+                value={phone}
+                onChange={e => setPhone(e.target.value)}
+                className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 dark:border-navy-700 bg-slate-50 dark:bg-navy-800 text-xs text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-brand-500 font-mono"
+              />
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                Primary District
+              </label>
+              <select
+                value={district}
+                onChange={e => {
+                  setDistrict(e.target.value)
+                  const dObj = DISTRICTS.find(d => d.name === e.target.value)
+                  if (dObj) {
+                    const cl = getCities(dObj.id)
+                    setCity(cl[0] || e.target.value)
+                  }
+                }}
+                className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 dark:border-navy-700 bg-slate-50 dark:bg-navy-800 text-xs text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-brand-500"
+              >
+                {DISTRICTS.map(d => (
+                  <option key={d.id} value={d.name}>{d.name} {d.nameKn ? `(${d.nameKn})` : ''}</option>
+                ))}
+              </select>
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                Years of Experience
+              </label>
+              <input
+                type="number"
+                value={experience}
+                onChange={e => setExperience(e.target.value)}
+                className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 dark:border-navy-700 bg-slate-50 dark:bg-navy-800 text-xs text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-brand-500"
+              />
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
+              Bio & Skill Highlights
+            </label>
+            <textarea
+              rows={3}
+              value={bio}
+              onChange={e => setBio(e.target.value)}
+              className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 dark:border-navy-700 bg-slate-50 dark:bg-navy-800 text-xs text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-brand-500 resize-none"
+            />
+          </div>
+
+          <button
+            type="submit"
+            disabled={saving}
+            className="px-5 py-2.5 rounded-xl bg-brand-500 hover:bg-brand-600 text-white font-bold text-xs shadow-brand transition-colors flex items-center gap-2"
+          >
+            <Save className="w-3.5 h-3.5" />
+            <span>{saving ? 'Saving…' : 'Save Profile'}</span>
+          </button>
+        </form>
+
+        {/* Preferences */}
+        <div className="p-6 rounded-3xl bg-white dark:bg-navy-900 border border-slate-200/80 dark:border-navy-800 shadow-card space-y-4">
+          <h3 className="font-bold text-sm text-slate-900 dark:text-white pb-2 border-b border-slate-100 dark:border-navy-800">
+            Appearance & Preferences
+          </h3>
+
+          <div className="flex items-center justify-between p-3 rounded-2xl bg-slate-50 dark:bg-navy-800 border border-slate-200 dark:border-navy-700">
+            <div className="flex items-center gap-3">
+              <div className="w-8 h-8 rounded-xl bg-amber-500/10 text-amber-500 flex items-center justify-center">
+                {isDark ? <Moon className="w-4 h-4" /> : <Sun className="w-4 h-4" />}
+              </div>
+              <div>
+                <p className="font-bold text-xs text-slate-900 dark:text-white">Dark Theme</p>
+                <p className="text-[11px] text-slate-400">Toggle dark / light appearance</p>
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={toggleTheme}
+              className={`w-12 h-6 rounded-full transition-colors p-0.5 flex items-center ${
+                isDark ? 'bg-brand-500 justify-end' : 'bg-slate-300 justify-start'
+              }`}
+            >
+              <div className="w-5 h-5 rounded-full bg-white shadow-sm" />
+            </button>
+          </div>
+        </div>
+
+        {/* Logout */}
+        <button
+          type="button"
+          onClick={handleLogout}
+          className="w-full py-3.5 rounded-2xl bg-red-500/10 hover:bg-red-500/20 text-red-600 dark:text-red-400 font-bold text-xs border border-red-500/30 transition-colors flex items-center justify-center gap-2"
+        >
+          <LogOut className="w-4 h-4" />
+          <span>Sign Out Partner Account</span>
+        </button>
+      </main>
     </div>
   )
 }
