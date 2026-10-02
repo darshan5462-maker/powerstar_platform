@@ -75,7 +75,7 @@ export async function createBooking(payload: {
   district: string
   latitude?: number
   longitude?: number
-  scheduled_at: string
+  scheduled_at?: string
   base_amount: number
   platform_fee: number
   gst_amount: number
@@ -85,46 +85,94 @@ export async function createBooking(payload: {
   try {
     const staticSvc = ALL_SERVICES.find(s => s.id === payload.category_slug) || ALL_SERVICES[0]
 
-    // 1. Try to resolve valid category ID from Supabase
+    // 1. Resolve or verify Category ID from Supabase
     let categoryId: string | null = null
-    const { data: catData } = await supabase
-      .from('service_categories')
-      .select('id')
-      .eq('slug', payload.category_slug)
-      .maybeSingle()
-
-    if (catData?.id) {
-      categoryId = catData.id
-    } else {
-      // Find any first category row in DB
-      const { data: anyCat } = await supabase
+    try {
+      const { data: catData } = await supabase
         .from('service_categories')
         .select('id')
-        .limit(1)
+        .eq('slug', payload.category_slug)
         .maybeSingle()
-      if (anyCat?.id) {
-        categoryId = anyCat.id
+
+      if (catData?.id) {
+        categoryId = catData.id
+      } else {
+        const { data: anyCat } = await supabase
+          .from('service_categories')
+          .select('id')
+          .limit(1)
+          .maybeSingle()
+        if (anyCat?.id) {
+          categoryId = anyCat.id
+        }
       }
+    } catch (e) {
+      // ignore
+    }
+
+    // 2. Resolve Customer ID (Ensure valid UUID for PostgreSQL)
+    const isUUID = (str: string) => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(str || '')
+    let validCustomerId = payload.customer_id
+
+    if (!isUUID(validCustomerId)) {
+      try {
+        const { data: { user } } = await supabase.auth.getUser()
+        if (user?.id && isUUID(user.id)) {
+          validCustomerId = user.id
+        } else {
+          // Stable fallback UUID for guest/demo customers
+          validCustomerId = 'c0000000-0000-4000-8000-000000000001'
+        }
+      } catch (e) {
+        validCustomerId = 'c0000000-0000-4000-8000-000000000001'
+      }
+    }
+
+    // Ensure customer profile row exists in Supabase to satisfy Foreign Key
+    if (isUUID(validCustomerId)) {
+      await supabase.from('profiles').upsert({
+        id: validCustomerId,
+        full_name: 'Customer',
+        role: 'customer',
+        district: payload.district,
+        city: payload.city,
+        is_active: true
+      }, { onConflict: 'id', ignoreDuplicates: true }).catch(() => {})
+    }
+
+    // 3. Format valid ISO timestamp for PostgreSQL TIMESTAMPTZ
+    let validScheduledAtIso = new Date().toISOString()
+    const rawSchedule = payload.scheduled_at || 'Immediate'
+    if (rawSchedule.toLowerCase().includes('tomorrow')) {
+      const d = new Date()
+      d.setDate(d.getDate() + 1)
+      validScheduledAtIso = d.toISOString()
+    } else if (!isNaN(Date.parse(rawSchedule))) {
+      validScheduledAtIso = new Date(rawSchedule).toISOString()
     }
 
     const startOtp = Math.floor(1000 + Math.random() * 9000).toString()
     const endOtp = Math.floor(1000 + Math.random() * 9000).toString()
     const bookingRef = `PS-${Math.floor(10000 + Math.random() * 90000)}`
 
+    const combinedNotes = payload.customer_notes
+      ? `Schedule: ${rawSchedule} | Notes: ${payload.customer_notes}`
+      : `Schedule: ${rawSchedule}`
+
     const insertObj: any = {
-      customer_id: payload.customer_id,
+      customer_id: validCustomerId,
       booking_ref: bookingRef,
       address: payload.address,
       city: payload.city,
       district: payload.district,
       latitude: payload.latitude || null,
       longitude: payload.longitude || null,
-      scheduled_at: payload.scheduled_at,
+      scheduled_at: validScheduledAtIso,
       base_amount: payload.base_amount,
       platform_fee: payload.platform_fee,
       gst_amount: payload.gst_amount,
       total_amount: payload.total_amount,
-      customer_notes: payload.customer_notes || null,
+      customer_notes: combinedNotes,
       start_otp: startOtp,
       end_otp: endOtp,
       status: 'pending_admin' as BookingStatus
@@ -145,6 +193,7 @@ export async function createBooking(payload: {
     if (!dbError && dbBooking) {
       createdBooking = {
         ...dbBooking,
+        scheduled_at: rawSchedule, // human friendly for UI
         category: {
           name: staticSvc.name,
           name_kn: staticSvc.nameKn,
@@ -153,10 +202,13 @@ export async function createBooking(payload: {
         }
       }
     } else {
-      console.warn('Supabase insert notice (using synchronized booking):', dbError?.message)
+      if (dbError) {
+        console.warn('Supabase insert notice (using synchronized booking):', dbError.message)
+      }
       createdBooking = {
         id: 'bk_' + Date.now(),
         ...insertObj,
+        scheduled_at: rawSchedule,
         category: {
           name: staticSvc.name,
           name_kn: staticSvc.nameKn,
@@ -384,24 +436,33 @@ export async function assignProviderToBooking(
   providerId: string
 ): Promise<{ success: boolean; error?: string }> {
   try {
+    const isUUID = (str: string) => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(str || '')
+    const updateObj: any = {
+      status: 'provider_assigned',
+      accepted_at: new Date().toISOString()
+    }
+    if (isUUID(providerId)) {
+      updateObj.provider_id = providerId
+    }
+
     // 1. Update Supabase
-    await supabase
-      .from('bookings')
-      .update({
-        provider_id: providerId,
-        status: 'provider_assigned',
-        accepted_at: new Date().toISOString()
-      })
-      .eq('id', bookingId)
+    try {
+      await supabase
+        .from('bookings')
+        .update(updateObj)
+        .eq('id', bookingId)
+    } catch (e) {
+      // ignore
+    }
 
     // 2. Fetch provider info for enrichment
     const provs = getMockVerifiedProviders()
-    const matchProv = provs.find(p => p.id === providerId)
+    const matchProv = provs.find(p => p.id === providerId) || provs[0]
 
     // 3. Update local storage sync
     const localList = getLocalBookings()
     const updatedList = localList.map(b => {
-      if (b.id === bookingId) {
+      if (b.id === bookingId || b.booking_ref === bookingId) {
         return {
           ...b,
           provider_id: providerId,
@@ -597,6 +658,7 @@ export async function updateProviderKycStatus(
 }
 
 function getMockVerifiedProviders(district?: string): ProviderProfile[] {
+  const targetDistrict = district || 'Bengaluru Urban'
   return [
     {
       id: 'prov-mock-1',
@@ -604,7 +666,7 @@ function getMockVerifiedProviders(district?: string): ProviderProfile[] {
       hourly_rate: 280,
       bio: 'Certified Master Electrician & Power Systems Specialist',
       skills_tags: ['Wiring', 'Inverters', 'MCB', 'Appliances'],
-      service_radius: 20,
+      service_radius: 35,
       is_online: true,
       kyc_status: 'verified',
       rating: 4.9,
@@ -614,10 +676,10 @@ function getMockVerifiedProviders(district?: string): ProviderProfile[] {
       profile: {
         id: 'prov-mock-1',
         role: 'provider',
-        full_name: 'Basavaraj Patil',
+        full_name: 'Basavaraj Patil (Master Electrician)',
         phone: '+91 98450 12345',
-        district: district || 'Bagalkot',
-        city: 'Bagalkot',
+        district: targetDistrict,
+        city: 'City Centre',
         is_active: true
       },
       category: {
@@ -633,7 +695,7 @@ function getMockVerifiedProviders(district?: string): ProviderProfile[] {
       hourly_rate: 260,
       bio: 'Expert Residential & Commercial Plumbing Contractor',
       skills_tags: ['Leakage', 'Pipes', 'Sanitary', 'Tanks'],
-      service_radius: 15,
+      service_radius: 30,
       is_online: true,
       kyc_status: 'verified',
       rating: 4.85,
@@ -643,10 +705,10 @@ function getMockVerifiedProviders(district?: string): ProviderProfile[] {
       profile: {
         id: 'prov-mock-2',
         role: 'provider',
-        full_name: 'Manjunath Gowda',
+        full_name: 'Manjunath Gowda (Master Plumber)',
         phone: '+91 94480 67890',
-        district: district || 'Bengaluru Urban',
-        city: 'Indiranagar',
+        district: targetDistrict,
+        city: 'South Hub',
         is_active: true
       },
       category: {
@@ -662,7 +724,7 @@ function getMockVerifiedProviders(district?: string): ProviderProfile[] {
       hourly_rate: 899,
       bio: 'Commercial Goods Transport & Tata Ace Fast Delivery',
       skills_tags: ['750kg Goods', 'Fast Transit', 'Careful Handling'],
-      service_radius: 35,
+      service_radius: 50,
       is_online: true,
       kyc_status: 'verified',
       rating: 4.92,
@@ -672,10 +734,10 @@ function getMockVerifiedProviders(district?: string): ProviderProfile[] {
       profile: {
         id: 'prov-mock-3',
         role: 'provider',
-        full_name: 'Ramesh Kumbar',
+        full_name: 'Ramesh Kumbar (Tata Ace Logistics)',
         phone: '+91 99800 54321',
-        district: district || 'Bengaluru Urban',
-        city: 'Whitefield',
+        district: targetDistrict,
+        city: 'West Logistics',
         is_active: true
       },
       category: {
@@ -691,7 +753,7 @@ function getMockVerifiedProviders(district?: string): ProviderProfile[] {
       hourly_rate: 200,
       bio: 'Professional Home Deep Cleaning & Sanitization Team Leader',
       skills_tags: ['Deep Clean', 'Kitchen', 'Bathroom', 'Sofa'],
-      service_radius: 15,
+      service_radius: 25,
       is_online: true,
       kyc_status: 'verified',
       rating: 4.8,
@@ -701,15 +763,15 @@ function getMockVerifiedProviders(district?: string): ProviderProfile[] {
       profile: {
         id: 'prov-mock-4',
         role: 'provider',
-        full_name: 'Sunil Kumar Shetty',
-        phone: '+91 87620 98765',
-        district: district || 'Bengaluru Urban',
-        city: 'Jayanagar',
+        full_name: 'Anand Kumar (Cleaning Specialist)',
+        phone: '+91 97410 11223',
+        district: targetDistrict,
+        city: 'Central',
         is_active: true
       },
       category: {
         id: 'cat-clean',
-        name: 'Home Cleaning',
+        name: 'House Cleaning',
         icon: '🧹',
         slug: 'cleaning'
       }
