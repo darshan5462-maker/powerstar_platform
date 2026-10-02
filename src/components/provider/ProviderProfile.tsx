@@ -152,17 +152,20 @@ export default function ProviderProfile() {
       }
 
       // 2. Update profiles table
-      await supabase
-        .from('profiles')
-        .update({
-          full_name: fullName,
-          phone,
-          district,
-          city,
-          updated_at: new Date().toISOString()
-        })
-        .eq('id', profile.id)
-        .catch(() => {})
+      try {
+        await supabase
+          .from('profiles')
+          .update({
+            full_name: fullName,
+            phone,
+            district,
+            city,
+            updated_at: new Date().toISOString()
+          })
+          .eq('id', profile.id)
+      } catch (e) {
+        // ignore
+      }
 
       // 3. Upsert providers table
       const providerPayload: any = {
@@ -181,10 +184,13 @@ export default function ProviderProfile() {
         providerPayload.category_id = categoryId
       }
 
-      await supabase
-        .from('providers')
-        .upsert(providerPayload, { onConflict: 'id' })
-        .catch(() => {})
+      try {
+        await supabase
+          .from('providers')
+          .upsert(providerPayload, { onConflict: 'id' })
+      } catch (e) {
+        // ignore
+      }
 
       // 4. Update local auth state
       setProfile({

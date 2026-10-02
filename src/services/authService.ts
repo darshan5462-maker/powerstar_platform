@@ -50,14 +50,18 @@ export async function signUp(params: { email: string; password: string; full_nam
     return { user: { id: mockUser.id, email: params.email }, session: null }
   }
   if (data.user) {
-    await supabase.from('profiles').upsert({
-      id: data.user.id,
-      full_name: params.full_name,
-      role: params.role,
-      phone: params.phone,
-      district: params.district,
-      is_active: true
-    }).catch(() => {})
+    try {
+      await supabase.from('profiles').upsert({
+        id: data.user.id,
+        full_name: params.full_name,
+        role: params.role,
+        phone: params.phone,
+        district: params.district,
+        is_active: true
+      })
+    } catch (e) {
+      // ignore
+    }
     
     useAuthStore.getState().setProfile({
       id: data.user.id,

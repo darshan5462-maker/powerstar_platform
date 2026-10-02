@@ -130,14 +130,18 @@ export async function createBooking(payload: {
 
     // Ensure customer profile row exists in Supabase to satisfy Foreign Key
     if (isUUID(validCustomerId)) {
-      await supabase.from('profiles').upsert({
-        id: validCustomerId,
-        full_name: 'Customer',
-        role: 'customer',
-        district: payload.district,
-        city: payload.city,
-        is_active: true
-      }, { onConflict: 'id', ignoreDuplicates: true }).catch(() => {})
+      try {
+        await supabase.from('profiles').upsert({
+          id: validCustomerId,
+          full_name: 'Customer',
+          role: 'customer',
+          district: payload.district,
+          city: payload.city,
+          is_active: true
+        }, { onConflict: 'id', ignoreDuplicates: true })
+      } catch (e) {
+        // ignore
+      }
     }
 
     // 3. Format valid ISO timestamp for PostgreSQL TIMESTAMPTZ
@@ -650,7 +654,11 @@ export async function submitReview(payload: {
   comment?: string
 }): Promise<{ success: boolean; error?: string }> {
   try {
-    await supabase.from('reviews').insert(payload).catch(() => {})
+    try {
+      await supabase.from('reviews').insert(payload)
+    } catch (e) {
+      // ignore
+    }
     return { success: true }
   } catch (err: any) {
     return { success: false, error: err?.message || 'Failed to submit review' }
