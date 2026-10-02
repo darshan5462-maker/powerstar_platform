@@ -450,14 +450,30 @@ export async function assignProviderToBooking(
       await supabase
         .from('bookings')
         .update(updateObj)
-        .eq('id', bookingId)
+        .or(`id.eq.${bookingId},booking_ref.eq.${bookingId}`)
     } catch (e) {
       // ignore
     }
 
     // 2. Fetch provider info for enrichment
-    const provs = getMockVerifiedProviders()
-    const matchProv = provs.find(p => p.id === providerId) || provs[0]
+    let matchProv: any = null
+    try {
+      const { data: dbProv } = await supabase
+        .from('providers')
+        .select('*, profile:profiles(*), category:service_categories(*)')
+        .eq('id', providerId)
+        .maybeSingle()
+      if (dbProv?.profile) {
+        matchProv = dbProv
+      }
+    } catch (e) {
+      // ignore
+    }
+
+    if (!matchProv) {
+      const provs = getMockVerifiedProviders()
+      matchProv = provs.find(p => p.id === providerId) || provs[0]
+    }
 
     // 3. Update local storage sync
     const localList = getLocalBookings()
@@ -468,8 +484,17 @@ export async function assignProviderToBooking(
           provider_id: providerId,
           status: 'provider_assigned' as BookingStatus,
           provider: {
-            full_name: matchProv?.profile?.full_name || 'Basavaraj Patil',
-            phone: matchProv?.profile?.phone || '+91 98450 12345'
+            id: providerId,
+            full_name: matchProv?.profile?.full_name || 'Assigned Technician',
+            phone: matchProv?.profile?.phone || '+91 98450 12345',
+            avatar_url: matchProv?.profile?.avatar_url,
+            rating: matchProv?.rating || 4.9,
+            total_jobs: matchProv?.total_jobs || 120
+          },
+          provider_details: {
+            rating: matchProv?.rating || 4.9,
+            total_jobs: matchProv?.total_jobs || 120,
+            experience_years: matchProv?.experience_years || 5
           }
         }
       }
@@ -500,21 +525,41 @@ export async function verifyAndProcessUpiPayment(payload: {
     const providerPayout = Math.round(payload.amount * 0.90)
 
     // 1. Supabase update
-    await supabase
-      .from('bookings')
-      .update({
-        status: 'confirmed',
-        updated_at: new Date().toISOString()
-      })
-      .eq('id', payload.bookingId)
+    try {
+      await supabase
+        .from('bookings')
+        .update({
+          status: 'confirmed',
+          updated_at: new Date().toISOString()
+        })
+        .or(`id.eq.${payload.bookingId},booking_ref.eq.${payload.bookingId}`)
+
+      await supabase
+        .from('payments')
+        .insert({
+          booking_id: payload.bookingId,
+          customer_id: payload.customerId,
+          provider_id: payload.providerId || null,
+          amount: payload.amount,
+          platform_fee: platformFee,
+          provider_payout: providerPayout,
+          status: 'success',
+          method: 'upi'
+        })
+    } catch (e) {
+      // ignore
+    }
 
     // 2. Sync local storage
     const localList = getLocalBookings()
     const updatedList = localList.map(b => {
-      if (b.id === payload.bookingId) {
+      if (b.id === payload.bookingId || b.booking_ref === payload.bookingId) {
         return {
           ...b,
-          status: 'confirmed' as BookingStatus
+          status: 'confirmed' as BookingStatus,
+          payment_status: 'paid',
+          upi_ref: txnRef,
+          updated_at: new Date().toISOString()
         }
       }
       return b
@@ -615,7 +660,10 @@ export async function submitReview(payload: {
 // ==========================================
 // 7. PROVIDERS LISTING & VERIFICATION
 // ==========================================
-export async function getVerifiedProvidersList(district?: string): Promise<ProviderProfile[]> {
+export async function getVerifiedProvidersList(
+  district?: string,
+  categorySlugOrId?: string
+): Promise<ProviderProfile[]> {
   try {
     const { data } = await supabase
       .from('providers')
@@ -625,19 +673,52 @@ export async function getVerifiedProvidersList(district?: string): Promise<Provi
         category:service_categories(id, name, icon, slug)
       `)
 
-    if (!data || data.length === 0) {
-      return getMockVerifiedProviders(district)
+    let list: ProviderProfile[] = []
+    if (data && data.length > 0) {
+      list = data
+    } else {
+      list = getMockVerifiedProviders(district, categorySlugOrId)
     }
 
+    // Filter by district if provided
     if (district) {
       const norm = district.trim().toLowerCase()
-      const filtered = data.filter(p => !p.profile?.district || p.profile.district.trim().toLowerCase() === norm)
-      return filtered.length > 0 ? filtered : data
+      const inDistrict = list.filter(p => !p.profile?.district || p.profile.district.trim().toLowerCase() === norm)
+      if (inDistrict.length > 0) {
+        list = inDistrict
+      }
     }
 
-    return data
+    // Prioritize and tag matching service category providers
+    if (categorySlugOrId) {
+      const catNorm = categorySlugOrId.trim().toLowerCase()
+      list = list.map(p => {
+        const pCatSlug = p.category?.slug?.toLowerCase() || ''
+        const pCatName = p.category?.name?.toLowerCase() || ''
+        const pBio = p.bio?.toLowerCase() || ''
+        const pSkills = (p.skills_tags || []).map(s => s.toLowerCase()).join(' ')
+        const pName = p.profile?.full_name?.toLowerCase() || ''
+
+        const isExactMatch =
+          pCatSlug === catNorm ||
+          pCatName.includes(catNorm) ||
+          pBio.includes(catNorm) ||
+          pSkills.includes(catNorm) ||
+          pName.includes(catNorm)
+
+        return {
+          ...p,
+          _isMatch: isExactMatch
+        } as any
+      })
+
+      // Sort matching providers to the top
+      list.sort((a: any, b: any) => (b._isMatch ? 1 : 0) - (a._isMatch ? 1 : 0))
+    }
+
+    return list
   } catch (err) {
-    return getMockVerifiedProviders(district)
+    return getMockVerifiedProviders(district, categorySlugOrId)
   }
 }
 
