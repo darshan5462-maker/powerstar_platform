@@ -36,15 +36,25 @@ export default function CustomerBookings() {
   const [reviewModalBooking, setReviewModalBooking] = useState<Booking | null>(null)
 
   const fetchBookings = async () => {
-    if (!profile?.id) return
+    const customerId = profile?.id || 'usr_cust_demo'
     setLoading(true)
-    const data = await getCustomerBookings(profile.id)
+    const data = await getCustomerBookings(customerId)
     setBookings(data)
     setLoading(false)
   }
 
   useEffect(() => {
     fetchBookings()
+    const interval = setInterval(fetchBookings, 3000)
+    const handleStorage = (e: StorageEvent) => {
+      if (e.key === 'ps_bookings_sync_v2') fetchBookings()
+    }
+    window.addEventListener('storage', handleStorage)
+
+    return () => {
+      clearInterval(interval)
+      window.removeEventListener('storage', handleStorage)
+    }
   }, [profile?.id])
 
   const filtered = bookings.filter(b => {

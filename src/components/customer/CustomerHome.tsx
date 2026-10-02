@@ -37,10 +37,10 @@ export default function CustomerHome() {
   const firstName = profile?.full_name?.split(' ')[0] || 'Friend'
 
   useEffect(() => {
-    if (!profile?.id) return
+    const customerId = profile?.id || 'usr_cust_demo'
     const fetchActive = async () => {
       setLoading(true)
-      const data = await getCustomerBookings(profile.id)
+      const data = await getCustomerBookings(customerId)
       const ongoing = data.filter(b =>
         ['pending_admin', 'provider_assigned', 'payment_pending', 'confirmed', 'in_progress'].includes(b.status)
       )
@@ -48,6 +48,16 @@ export default function CustomerHome() {
       setLoading(false)
     }
     fetchActive()
+    const interval = setInterval(fetchActive, 3000)
+    const handleStorage = (e: StorageEvent) => {
+      if (e.key === 'ps_bookings_sync_v2') fetchActive()
+    }
+    window.addEventListener('storage', handleStorage)
+
+    return () => {
+      clearInterval(interval)
+      window.removeEventListener('storage', handleStorage)
+    }
   }, [profile?.id])
 
   // Filter services by search & category

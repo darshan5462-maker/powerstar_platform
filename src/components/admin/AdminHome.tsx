@@ -15,6 +15,7 @@ import {
   MapPin,
   ChevronRight
 } from 'lucide-react'
+import { supabase } from '@/lib/supabase'
 import { getAllBookingsAdmin, getVerifiedProvidersList } from '@/services/api'
 import { Booking, ProviderProfile } from '@/types'
 import { StatusBadge } from '@/components/ui/Badge'

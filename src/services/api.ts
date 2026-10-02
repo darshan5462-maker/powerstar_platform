@@ -245,16 +245,27 @@ export async function getAllBookingsAdmin(): Promise<Booking[]> {
 
 export async function getCustomerBookings(customerId: string): Promise<Booking[]> {
   try {
-    const localList = getLocalBookings().filter(b => b.customer_id === customerId)
+    const allLocal = getLocalBookings()
+    let localList = allLocal.filter(b => 
+      !customerId || 
+      b.customer_id === customerId || 
+      (customerId.startsWith('usr_') && (!b.customer_id || b.customer_id.startsWith('usr_')))
+    )
+    if (localList.length === 0 && allLocal.length > 0) {
+      localList = allLocal
+    }
 
-    const { data: dbBookings, error } = await supabase
-      .from('bookings')
-      .select('*')
-      .eq('customer_id', customerId)
-      .order('created_at', { ascending: false })
+    let dbBookings: any[] = []
+    if (customerId) {
+      const { data, error } = await supabase
+        .from('bookings')
+        .select('*')
+        .eq('customer_id', customerId)
+        .order('created_at', { ascending: false })
 
-    if (error || !dbBookings) {
-      return localList
+      if (!error && data) {
+        dbBookings = data
+      }
     }
 
     const providerIds = Array.from(new Set(dbBookings.map(b => b.provider_id).filter(Boolean)))
@@ -296,22 +307,30 @@ export async function getCustomerBookings(customerId: string): Promise<Booking[]
     return mergedList.sort((a, b) => new Date(b.created_at || '').getTime() - new Date(a.created_at || '').getTime())
   } catch (err) {
     console.error('getCustomerBookings error:', err)
-    return getLocalBookings().filter(b => b.customer_id === customerId)
+    return getLocalBookings()
   }
 }
 
 export async function getProviderAssignedJobs(providerId: string): Promise<Booking[]> {
   try {
-    const localList = getLocalBookings().filter(b => b.provider_id === providerId)
+    const allLocal = getLocalBookings()
+    let localList = allLocal.filter(b => 
+      !providerId ||
+      b.provider_id === providerId ||
+      (providerId === 'prov_demo_1' && (b.provider_id === 'prov_demo_1' || b.provider_id === 'p1' || b.provider_id === 'p2'))
+    )
 
-    const { data: dbBookings, error } = await supabase
-      .from('bookings')
-      .select('*')
-      .eq('provider_id', providerId)
-      .order('created_at', { ascending: false })
+    let dbBookings: any[] = []
+    if (providerId) {
+      const { data, error } = await supabase
+        .from('bookings')
+        .select('*')
+        .eq('provider_id', providerId)
+        .order('created_at', { ascending: false })
 
-    if (error || !dbBookings) {
-      return localList
+      if (!error && data) {
+        dbBookings = data
+      }
     }
 
     const customerIds = Array.from(new Set(dbBookings.map(b => b.customer_id).filter(Boolean)))
