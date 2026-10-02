@@ -38,6 +38,24 @@ export default function AdminHome() {
       setLoading(false)
     }
     fetchData()
+    const interval = setInterval(fetchData, 3000)
+    const handleStorage = (e: StorageEvent) => {
+      if (e.key === 'ps_bookings_sync_v2') fetchData()
+    }
+    window.addEventListener('storage', handleStorage)
+
+    const channel = supabase
+      .channel('admin-home-live')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'bookings' }, () => {
+        fetchData()
+      })
+      .subscribe()
+
+    return () => {
+      clearInterval(interval)
+      window.removeEventListener('storage', handleStorage)
+      supabase.removeChannel(channel)
+    }
   }, [])
 
   const pendingAssignment = bookings.filter(b => b.status === 'pending_admin')

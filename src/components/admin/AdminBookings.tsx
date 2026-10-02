@@ -58,6 +58,24 @@ export default function AdminBookings() {
 
   useEffect(() => {
     fetchBookings()
+    const interval = setInterval(fetchBookings, 3000)
+    const handleStorage = (e: StorageEvent) => {
+      if (e.key === 'ps_bookings_sync_v2') fetchBookings()
+    }
+    window.addEventListener('storage', handleStorage)
+
+    const channel = supabase
+      .channel('admin-bookings-live')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'bookings' }, () => {
+        fetchBookings()
+      })
+      .subscribe()
+
+    return () => {
+      clearInterval(interval)
+      window.removeEventListener('storage', handleStorage)
+      supabase.removeChannel(channel)
+    }
   }, [])
 
   async function handleOpenAssignModal(booking: Booking) {
