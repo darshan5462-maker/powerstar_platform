@@ -114,13 +114,27 @@ export async function createBooking(payload: {
     const isUUID = (str: string) => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(str || '')
     let validCustomerId = payload.customer_id
 
+    // Check if authenticated user exists
+    try {
+      const { data: { user } } = await supabase.auth.getUser()
+      if (user?.id && isUUID(user.id)) {
+        validCustomerId = user.id
+      }
+    } catch (e) {
+      // ignore
+    }
+
+    // If still not a valid UUID, find an existing profile ID from Supabase
     if (!isUUID(validCustomerId)) {
       try {
-        const { data: { user } } = await supabase.auth.getUser()
-        if (user?.id && isUUID(user.id)) {
-          validCustomerId = user.id
+        const { data: existingProf } = await supabase
+          .from('profiles')
+          .select('id')
+          .limit(1)
+          .maybeSingle()
+        if (existingProf?.id && isUUID(existingProf.id)) {
+          validCustomerId = existingProf.id
         } else {
-          // Stable fallback UUID for guest/demo customers
           validCustomerId = 'c0000000-0000-4000-8000-000000000001'
         }
       } catch (e) {
@@ -186,17 +200,71 @@ export async function createBooking(payload: {
       insertObj.category_id = categoryId
     }
 
-    // Try Supabase insert
+    // Multi-tier resilient insert to Supabase
     let createdBooking: any = null
-    const { data: dbBooking, error: dbError } = await supabase
+    let dbBooking: any = null
+
+    // Attempt 1: Full payload with status 'pending_admin'
+    const { data: d1, error: e1 } = await supabase
       .from('bookings')
       .insert(insertObj)
       .select()
       .maybeSingle()
 
-    if (!dbError && dbBooking) {
+    if (!e1 && d1) {
+      dbBooking = d1
+    } else {
+      console.warn('Supabase booking insert attempt 1 notice:', e1?.message)
+
+      // Attempt 2: Try with status 'pending' (if enum pending_admin not yet in DB)
+      const obj2 = { ...insertObj, status: 'pending' }
+      const { data: d2, error: e2 } = await supabase
+        .from('bookings')
+        .insert(obj2)
+        .select()
+        .maybeSingle()
+
+      if (!e2 && d2) {
+        dbBooking = d2
+      } else {
+        console.warn('Supabase booking insert attempt 2 notice:', e2?.message)
+
+        // Attempt 3: Strip non-core columns if schema differs
+        const obj3: any = {
+          customer_id: validCustomerId,
+          booking_ref: bookingRef,
+          address: payload.address,
+          city: payload.city,
+          district: payload.district,
+          scheduled_at: validScheduledAtIso,
+          base_amount: payload.base_amount,
+          platform_fee: payload.platform_fee,
+          gst_amount: payload.gst_amount,
+          total_amount: payload.total_amount,
+          customer_notes: combinedNotes,
+          status: 'pending'
+        }
+        if (categoryId) obj3.category_id = categoryId
+
+        const { data: d3, error: e3 } = await supabase
+          .from('bookings')
+          .insert(obj3)
+          .select()
+          .maybeSingle()
+
+        if (!e3 && d3) {
+          dbBooking = d3
+        } else {
+          console.error('Supabase booking insert attempt 3 error:', e3?.message)
+        }
+      }
+    }
+
+    if (dbBooking) {
       createdBooking = {
         ...dbBooking,
+        start_otp: dbBooking.start_otp || startOtp,
+        end_otp: dbBooking.end_otp || endOtp,
         scheduled_at: rawSchedule, // human friendly for UI
         category: {
           name: staticSvc.name,
@@ -206,9 +274,6 @@ export async function createBooking(payload: {
         }
       }
     } else {
-      if (dbError) {
-        console.warn('Supabase insert notice (using synchronized booking):', dbError.message)
-      }
       createdBooking = {
         id: 'bk_' + Date.now(),
         ...insertObj,

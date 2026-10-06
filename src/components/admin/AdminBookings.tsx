@@ -130,25 +130,33 @@ export default function AdminBookings() {
 
   const filteredBookings = bookings.filter(b => {
     let matchesFilter = true
+    const s = (b.status || '').toLowerCase()
+
     if (filter === 'All') {
       matchesFilter = true
     } else if (filter === 'pending_admin') {
-      matchesFilter = b.status === 'pending_admin' || b.status === 'pending' || b.status === 'requested' || !b.provider_id || (b as any).status === 'unassigned'
+      matchesFilter = (['pending_admin', 'pending', 'requested', 'unassigned'].includes(s) || !b.provider_id) && !['cancelled', 'rejected', 'completed', 'in_progress', 'confirmed', 'payment_pending', 'provider_assigned'].includes(s)
     } else if (filter === 'provider_assigned') {
-      matchesFilter = b.status === 'provider_assigned' || b.status === 'accepted'
+      matchesFilter = ['provider_assigned', 'accepted'].includes(s)
+    } else if (filter === 'payment_pending') {
+      matchesFilter = ['payment_pending', 'payment_due'].includes(s)
     } else if (filter === 'confirmed') {
-      matchesFilter = b.status === 'confirmed' || b.status === 'payment_success'
+      matchesFilter = ['confirmed', 'payment_success', 'paid'].includes(s)
     } else if (filter === 'in_progress') {
-      matchesFilter = b.status === 'in_progress' || b.status === 'active'
+      matchesFilter = ['in_progress', 'active', 'started'].includes(s)
+    } else if (filter === 'completed') {
+      matchesFilter = ['completed', 'settled', 'done'].includes(s)
+    } else if (filter === 'cancelled') {
+      matchesFilter = ['cancelled', 'rejected'].includes(s)
     } else {
-      matchesFilter = b.status === filter
+      matchesFilter = s === filter.toLowerCase()
     }
 
     const matchesSearch =
-      b.booking_ref.toLowerCase().includes(search.toLowerCase()) ||
+      (b.booking_ref || '').toLowerCase().includes(search.toLowerCase()) ||
       (b.customer?.full_name && b.customer.full_name.toLowerCase().includes(search.toLowerCase())) ||
       (b.category?.name && b.category.name.toLowerCase().includes(search.toLowerCase())) ||
-      b.district.toLowerCase().includes(search.toLowerCase()) ||
+      (b.district || '').toLowerCase().includes(search.toLowerCase()) ||
       (b.provider?.full_name && b.provider.full_name.toLowerCase().includes(search.toLowerCase()))
 
     return matchesFilter && matchesSearch
@@ -225,7 +233,11 @@ export default function AdminBookings() {
         ) : (
           <div className="space-y-3">
             {filteredBookings.map(bk => {
-              const needsAssignment = bk.status === 'pending_admin' || bk.status === 'pending' || bk.status === 'requested' || !bk.provider?.full_name || !bk.provider_id
+              const statusLower = (bk.status || '').toLowerCase()
+              const isCancelled = ['cancelled', 'rejected'].includes(statusLower)
+              const isCompleted = ['completed', 'settled'].includes(statusLower)
+              const needsAssignment = !isCancelled && !isCompleted && (['pending_admin', 'pending', 'requested', 'unassigned'].includes(statusLower) || !bk.provider_id)
+
               return (
                 <div
                   key={bk.id}
@@ -301,7 +313,15 @@ export default function AdminBookings() {
 
                   {/* Action Controls */}
                   <div className="pt-2 flex items-center justify-end gap-2">
-                    {needsAssignment ? (
+                    {isCancelled ? (
+                      <span className="text-xs font-semibold text-rose-500 bg-rose-500/10 px-3 py-1 rounded-xl border border-rose-500/20">
+                        Request Cancelled
+                      </span>
+                    ) : isCompleted ? (
+                      <span className="text-xs font-semibold text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 px-3 py-1 rounded-xl border border-emerald-500/20 flex items-center gap-1">
+                        <CheckCircle2 className="w-3.5 h-3.5" /> Order Completed
+                      </span>
+                    ) : needsAssignment ? (
                       <button
                         type="button"
                         onClick={() => handleOpenAssignModal(bk)}
