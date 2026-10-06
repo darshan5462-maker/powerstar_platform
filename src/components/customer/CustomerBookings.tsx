@@ -45,15 +45,23 @@ export default function CustomerBookings() {
 
   useEffect(() => {
     fetchBookings()
-    const interval = setInterval(fetchBookings, 30000)
+    const interval = setInterval(fetchBookings, 4000)
     const handleStorage = (e: StorageEvent) => {
       if (e.key === 'ps_bookings_sync_v2') fetchBookings()
     }
     window.addEventListener('storage', handleStorage)
 
+    const channel = supabase
+      .channel('cust-bookings-live-sync')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'bookings' }, () => {
+        fetchBookings()
+      })
+      .subscribe()
+
     return () => {
       clearInterval(interval)
       window.removeEventListener('storage', handleStorage)
+      supabase.removeChannel(channel)
     }
   }, [profile?.id])
 

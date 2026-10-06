@@ -101,7 +101,11 @@ export default function AdminBookings() {
     if (!selectedBookingForAssign) return
     setAssigningProviderId(providerId)
     try {
-      const res = await assignProviderToBooking(selectedBookingForAssign.id, providerId)
+      const res = await assignProviderToBooking(
+        selectedBookingForAssign.id,
+        providerId,
+        selectedBookingForAssign.booking_ref
+      )
       if (res.success) {
         toast.success(`Provider assigned to Booking #${selectedBookingForAssign.booking_ref}!`)
         setAssignModalOpen(false)

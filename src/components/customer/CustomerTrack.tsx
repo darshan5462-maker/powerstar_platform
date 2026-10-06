@@ -47,16 +47,16 @@ export default function CustomerTrack() {
   const [payModalOpen, setPayModalOpen] = useState(false)
   const [reviewModalOpen, setReviewModalOpen] = useState(false)
 
-  const loadBookings = useCallback(async () => {
+  const loadBookings = useCallback(async (isBackground = false) => {
     if (!profile?.id) return
-    setLoading(true)
+    if (!isBackground) setLoading(true)
     const data = await getCustomerBookings(profile.id)
     setBookings(data)
 
     if (data.length > 0) {
-      if (requestedId && data.some(b => b.id === requestedId)) {
+      if (requestedId && data.some(b => b.id === requestedId || b.booking_ref === requestedId)) {
         setSelectedBookingId(requestedId)
-      } else if (!selectedBookingId) {
+      } else if (!selectedBookingId || !data.some(b => b.id === selectedBookingId || b.booking_ref === selectedBookingId)) {
         // Default to first active or first booking
         const active = data.find(b =>
           ['pending_admin', 'provider_assigned', 'payment_pending', 'confirmed', 'in_progress'].includes(b.status)
@@ -64,49 +64,45 @@ export default function CustomerTrack() {
         setSelectedBookingId(active ? active.id : data[0].id)
       }
     }
-    setLoading(false)
+    if (!isBackground) setLoading(false)
   }, [profile?.id, requestedId, selectedBookingId])
 
   useEffect(() => {
     loadBookings()
-  }, [loadBookings])
 
-  // Realtime updates subscription
-  useEffect(() => {
-    if (!profile?.id) return
+    // 1. Fast 3-second auto-poll for real-time mobile sync
+    const interval = setInterval(() => loadBookings(true), 3000)
+
+    // 2. Storage event sync
+    const handleStorage = (e: StorageEvent) => {
+      if (e.key === 'ps_bookings_sync_v2') loadBookings(true)
+    }
+    window.addEventListener('storage', handleStorage)
+
+    // 3. Supabase Realtime channel for instant DB updates
     const channel = supabase
-      .channel(`cust-track-${profile.id}`)
+      .channel('cust-track-live-sync')
       .on(
         'postgres_changes',
         {
-          event: 'UPDATE',
+          event: '*',
           schema: 'public',
-          table: 'bookings',
-          filter: `customer_id=eq.${profile.id}`
+          table: 'bookings'
         },
-        (payload: any) => {
-          const updated = payload.new
-          setBookings(prev => prev.map(b => (b.id === updated.id ? { ...b, ...updated } : b)))
-
-          if (updated.status === 'provider_assigned') {
-            toast.success('🎉 A service professional has been assigned! Please complete UPI payment.')
-          } else if (updated.status === 'confirmed') {
-            toast.success('✅ Payment verified! Booking is confirmed.')
-          } else if (updated.status === 'in_progress') {
-            toast.success('🔧 Technician started the service job!')
-          } else if (updated.status === 'completed') {
-            toast.success('⭐ Service completed! Please leave a review.')
-          }
+        () => {
+          loadBookings(true)
         }
       )
       .subscribe()
 
     return () => {
+      clearInterval(interval)
+      window.removeEventListener('storage', handleStorage)
       supabase.removeChannel(channel)
     }
-  }, [profile?.id])
+  }, [loadBookings])
 
-  const currentBooking = bookings.find(b => b.id === selectedBookingId) || bookings[0]
+  const currentBooking = bookings.find(b => b.id === selectedBookingId || b.booking_ref === selectedBookingId) || bookings[0]
 
   // Determine active step index
   const getStepIndex = (status: string) => {

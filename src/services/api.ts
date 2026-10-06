@@ -367,34 +367,55 @@ export async function getAllBookingsAdmin(): Promise<Booking[]> {
 export async function getCustomerBookings(customerId: string): Promise<Booking[]> {
   try {
     const allLocal = getLocalBookings()
-    let localList = allLocal.filter(b => 
-      !customerId || 
-      b.customer_id === customerId || 
-      (customerId.startsWith('usr_') && (!b.customer_id || b.customer_id.startsWith('usr_')))
-    )
-    if (localList.length === 0 && allLocal.length > 0) {
-      localList = allLocal
-    }
+    const localRefs = allLocal.map(b => b.booking_ref).filter(Boolean)
+    const isUUID = (str: string) => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(str || '')
 
     let dbBookings: any[] = []
-    if (customerId) {
-      const { data, error } = await supabase
-        .from('bookings')
-        .select('*')
-        .eq('customer_id', customerId)
-        .order('created_at', { ascending: false })
 
-      if (!error && data) {
-        dbBookings = data
+    // 1. Fetch from Supabase with flexible matching
+    try {
+      if (isUUID(customerId)) {
+        if (localRefs.length > 0) {
+          const { data } = await supabase
+            .from('bookings')
+            .select('*')
+            .or(`customer_id.eq.${customerId},booking_ref.in.(${localRefs.map(r => `"${r}"`).join(',')})`)
+            .order('created_at', { ascending: false })
+          if (data) dbBookings = data
+        } else {
+          const { data } = await supabase
+            .from('bookings')
+            .select('*')
+            .eq('customer_id', customerId)
+            .order('created_at', { ascending: false })
+          if (data) dbBookings = data
+        }
+      } else if (localRefs.length > 0) {
+        const { data } = await supabase
+          .from('bookings')
+          .select('*')
+          .in('booking_ref', localRefs)
+          .order('created_at', { ascending: false })
+        if (data) dbBookings = data
+      } else {
+        const { data } = await supabase
+          .from('bookings')
+          .select('*')
+          .limit(20)
+          .order('created_at', { ascending: false })
+        if (data) dbBookings = data
       }
+    } catch (e) {
+      console.warn('Supabase customer bookings fetch notice:', e)
     }
 
+    // 2. Fetch provider profiles & categories for enrichment
     const providerIds = Array.from(new Set(dbBookings.map(b => b.provider_id).filter(Boolean)))
     let providerMap: Record<string, any> = {}
     if (providerIds.length > 0) {
       const { data: provProfiles } = await supabase
         .from('profiles')
-        .select('id, full_name, phone, avatar_url')
+        .select('id, full_name, phone, avatar_url, district')
         .in('id', providerIds)
 
       for (const p of provProfiles || []) {
@@ -416,12 +437,15 @@ export async function getCustomerBookings(customerId: string): Promise<Booking[]
       }
     })
 
-    const dbRefMap = new Set(enrichedDbList.map(b => b.booking_ref))
-    const mergedList = [...enrichedDbList]
+    // Merge with local bookings, prioritizing DB state when booking_ref matches
+    const dbRefMap = new Map(enrichedDbList.map(b => [b.booking_ref, b]))
+    const mergedList: Booking[] = [...enrichedDbList]
 
-    for (const lb of localList) {
+    for (const lb of allLocal) {
       if (!dbRefMap.has(lb.booking_ref)) {
-        mergedList.push(lb)
+        if (!customerId || lb.customer_id === customerId || (customerId.startsWith('usr_') && (!lb.customer_id || lb.customer_id.startsWith('usr_')))) {
+          mergedList.push(lb)
+        }
       }
     }
 
@@ -502,7 +526,8 @@ export async function getProviderAssignedJobs(providerId: string): Promise<Booki
 // ==========================================
 export async function assignProviderToBooking(
   bookingId: string,
-  providerId: string
+  providerId: string,
+  bookingRef?: string
 ): Promise<{ success: boolean; error?: string }> {
   try {
     const isUUID = (str: string) => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(str || '')
@@ -516,12 +541,25 @@ export async function assignProviderToBooking(
 
     // 1. Update Supabase
     try {
-      await supabase
-        .from('bookings')
-        .update(updateObj)
-        .or(`id.eq.${bookingId},booking_ref.eq.${bookingId}`)
+      if (isUUID(bookingId)) {
+        await supabase
+          .from('bookings')
+          .update(updateObj)
+          .eq('id', bookingId)
+      } else {
+        await supabase
+          .from('bookings')
+          .update(updateObj)
+          .eq('booking_ref', bookingId)
+      }
+      if (bookingRef) {
+        await supabase
+          .from('bookings')
+          .update(updateObj)
+          .eq('booking_ref', bookingRef)
+      }
     } catch (e) {
-      // ignore
+      console.warn('Supabase assign update notice:', e)
     }
 
     // 2. Fetch provider info for enrichment
@@ -547,7 +585,7 @@ export async function assignProviderToBooking(
     // 3. Update local storage sync
     const localList = getLocalBookings()
     const updatedList = localList.map(b => {
-      if (b.id === bookingId || b.booking_ref === bookingId) {
+      if (b.id === bookingId || b.booking_ref === bookingId || (bookingRef && b.booking_ref === bookingRef)) {
         return {
           ...b,
           provider_id: providerId,
