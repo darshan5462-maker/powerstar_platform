@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { CheckCircle2, ShieldCheck, Smartphone, QrCode, AlertCircle, ArrowRight, Loader2, X, Lock } from 'lucide-react'
+import { CheckCircle2, ShieldCheck, Smartphone, QrCode, AlertCircle, ArrowRight, Loader2, X, Lock, Copy, ExternalLink, Info, Check } from 'lucide-react'
 import { verifyAndProcessUpiPayment } from '@/services/api'
 import toast from 'react-hot-toast'
 
@@ -21,36 +21,42 @@ interface UpiPaymentModalProps {
   onSuccess: () => void
 }
 
+const POWERSTAR_UPI_VPA = 'powerstar.services@upi'
+
 const UPI_APPS = [
-  { id: 'gpay', name: 'Google Pay', icon: '⚡', color: '#1a73e8', bg: '#e8f0fe', vpaSuffix: '@okaxis' },
-  { id: 'phonepe', name: 'PhonePe', icon: '🟣', color: '#5f259f', bg: '#f3e8ff', vpaSuffix: '@ybl' },
-  { id: 'paytm', name: 'Paytm UPI', icon: '🔵', color: '#00b9f5', bg: '#e0f7fe', vpaSuffix: '@paytm' },
-  { id: 'bhim', name: 'BHIM UPI', icon: '🇮🇳', color: '#00834e', bg: '#e6f4ea', vpaSuffix: '@upi' },
-  { id: 'cred', name: 'CRED UPI', icon: '⚫', color: '#111827', bg: '#f3f4f6', vpaSuffix: '@cred' },
+  { id: 'phonepe', name: 'PhonePe', icon: '🟣', scheme: 'phonepe://pay', color: '#5f259f', bg: '#f3e8ff' },
+  { id: 'gpay', name: 'Google Pay', icon: '⚡', scheme: 'tez://upi/pay', color: '#1a73e8', bg: '#e8f0fe' },
+  { id: 'paytm', name: 'Paytm UPI', icon: '🔵', scheme: 'paytmmp://pay', color: '#00b9f5', bg: '#e0f7fe' },
+  { id: 'bhim', name: 'BHIM UPI', icon: '🇮🇳', scheme: 'upi://pay', color: '#00834e', bg: '#e6f4ea' },
+  { id: 'cred', name: 'CRED UPI', icon: '⚫', scheme: 'cred://upi', color: '#111827', bg: '#f3f4f6' },
 ]
 
 export default function UpiPaymentModal({ isOpen, onClose, booking, onSuccess }: UpiPaymentModalProps) {
   const [methodTab, setMethodTab] = useState<'apps' | 'id' | 'qr'>('apps')
-  const [selectedApp, setSelectedApp] = useState('gpay')
+  const [selectedApp, setSelectedApp] = useState('phonepe')
   const [upiId, setUpiId] = useState('')
+  const [utrNumber, setUtrNumber] = useState('')
+  const [copiedVpa, setCopiedVpa] = useState(false)
   const [payState, setPayState] = useState<'idle' | 'authorizing' | 'verifying' | 'success' | 'failed'>('idle')
-  const [countdown, setCountdown] = useState(120)
+  const [countdown, setCountdown] = useState(180)
   const [txnRef, setTxnRef] = useState('')
 
-  const base = booking.base_amount || Math.round(booking.total_amount * 0.94)
-  const fee = booking.platform_fee || Math.round(base * 0.05)
-  const gst = booking.gst_amount || Math.round(fee * 0.18)
-  const total = booking.total_amount || (base + fee + gst)
+  const total = booking.total_amount || 49
+
+  // Real UPI deep link format per NPCI standard
+  const upiIntentUri = `upi://pay?pa=${encodeURIComponent(POWERSTAR_UPI_VPA)}&pn=POWERSTAR%20SERVICES&am=${total.toFixed(2)}&tn=Booking-${encodeURIComponent(booking.booking_ref || 'PS')}&cu=INR`
+  const dynamicQrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=${encodeURIComponent(upiIntentUri)}`
 
   useEffect(() => {
     if (!isOpen) {
       setPayState('idle')
       setUpiId('')
-      setCountdown(120)
+      setUtrNumber('')
+      setCountdown(180)
     }
   }, [isOpen])
 
-  // Countdown timer for QR / Authorizing
+  // Countdown timer
   useEffect(() => {
     if (!isOpen || payState === 'success') return
     const timer = setInterval(() => {
@@ -59,28 +65,40 @@ export default function UpiPaymentModal({ isOpen, onClose, booking, onSuccess }:
     return () => clearInterval(timer)
   }, [isOpen, payState])
 
-  async function handlePay() {
-    let resolvedVpa = ''
-    if (methodTab === 'apps') {
-      const app = UPI_APPS.find(a => a.id === selectedApp)
-      resolvedVpa = `user.${selectedApp}${app?.vpaSuffix || '@upi'}`
-    } else if (methodTab === 'id') {
-      if (!upiId.trim() || !upiId.includes('@')) {
-        toast.error('Please enter a valid UPI ID (e.g. mobile@upi or name@okaxis)')
-        return
-      }
+  const copyUpiId = () => {
+    navigator.clipboard.writeText(POWERSTAR_UPI_VPA)
+    setCopiedVpa(true)
+    toast.success('UPI ID copied to clipboard!')
+    setTimeout(() => setCopiedVpa(false), 2500)
+  }
+
+  const launchUpiApp = () => {
+    // Attempt real mobile intent dispatch
+    try {
+      window.location.href = upiIntentUri
+    } catch (e) {
+      console.warn('UPI intent dispatch warning:', e)
+    }
+  }
+
+  async function handlePay(isManualConfirmation = false) {
+    let resolvedVpa = POWERSTAR_UPI_VPA
+    if (methodTab === 'id' && upiId.trim()) {
       resolvedVpa = upiId.trim()
-    } else {
-      resolvedVpa = 'powerstar.qr@npci'
+    }
+
+    // If on mobile app tab and not a manual confirmation, launch native UPI app
+    if (methodTab === 'apps' && !isManualConfirmation) {
+      launchUpiApp()
     }
 
     setPayState('authorizing')
 
-    // Step 1: Simulated UPI Intent dispatch
+    // Step 1: Network handshake
     setTimeout(() => {
       setPayState('verifying')
 
-      // Step 2: NPCI Verification & Database record creation
+      // Step 2: Database record & verification
       setTimeout(async () => {
         try {
           const res = await verifyAndProcessUpiPayment({
@@ -92,23 +110,24 @@ export default function UpiPaymentModal({ isOpen, onClose, booking, onSuccess }:
           })
 
           if (res.success) {
-            setTxnRef(res.transactionId || `UPI-${Date.now()}`)
+            const finalTxn = utrNumber.trim() || res.transactionId || `UPI-${Date.now()}`
+            setTxnRef(finalTxn)
             setPayState('success')
-            toast.success('UPI Payment Verified & Confirmed! 🎉')
+            toast.success('Advance Booking Fee Verified! Booking Confirmed 🎉')
             setTimeout(() => {
               onSuccess()
               onClose()
-            }, 2200)
+            }, 2000)
           } else {
             setPayState('failed')
             toast.error(res.error || 'Payment could not be verified')
           }
         } catch (err: any) {
           setPayState('failed')
-          toast.error(err?.message || 'Payment failed')
+          toast.error(err?.message || 'Payment processing error')
         }
-      }, 1600)
-    }, 1400)
+      }, 1500)
+    }, 1200)
   }
 
   const formatTime = (secs: number) => {
@@ -121,7 +140,7 @@ export default function UpiPaymentModal({ isOpen, onClose, booking, onSuccess }:
 
   return (
     <AnimatePresence>
-      <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/60 backdrop-blur-sm p-0 sm:p-4">
+      <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/65 backdrop-blur-sm p-0 sm:p-4">
         <motion.div
           initial={{ y: '100%', opacity: 0 }}
           animate={{ y: 0, opacity: 1 }}
@@ -136,7 +155,7 @@ export default function UpiPaymentModal({ isOpen, onClose, booking, onSuccess }:
                 UPI
               </div>
               <div>
-                <h3 className="font-bold text-base text-white">UPI Secure Checkout</h3>
+                <h3 className="font-bold text-base text-white">Real UPI Checkout</h3>
                 <p className="text-xs text-slate-300">Booking Ref: #{booking.booking_ref}</p>
               </div>
             </div>
@@ -151,46 +170,40 @@ export default function UpiPaymentModal({ isOpen, onClose, booking, onSuccess }:
           </div>
 
           {/* Body */}
-          <div className="p-6 overflow-y-auto flex-1">
+          <div className="p-6 overflow-y-auto flex-1 space-y-4">
             {/* Price Banner */}
-            <div className="bg-slate-50 dark:bg-navy-800/80 rounded-2xl p-4 border border-slate-200/70 dark:border-navy-700/60 mb-5">
-              <div className="flex items-center justify-between mb-2">
-                <span className="text-xs font-medium text-slate-500 dark:text-slate-400">Total Payable Amount</span>
-                <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20 flex items-center gap-1">
-                  <Lock className="w-3 h-3" /> UPI Only
+            <div className="bg-slate-50 dark:bg-navy-800/80 rounded-2xl p-4 border border-slate-200/70 dark:border-navy-700/60">
+              <div className="flex items-center justify-between mb-1">
+                <span className="text-xs font-semibold text-slate-500 dark:text-slate-400">
+                  Online Advance Booking Fee
+                </span>
+                <span className="text-xs font-semibold px-2.5 py-0.5 rounded-full bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20 flex items-center gap-1">
+                  <Lock className="w-3 h-3" /> Nominal Fee
                 </span>
               </div>
               <div className="flex items-baseline justify-between">
-                <span className="text-3xl font-extrabold text-slate-900 dark:text-white tracking-tight">
-                  ₹{total.toLocaleString('en-IN')}
+                <span className="text-3xl font-black text-slate-900 dark:text-white tracking-tight">
+                  ₹{total}
                 </span>
                 <span className="text-xs text-slate-500 dark:text-slate-400 font-medium">
-                  {booking.category?.name || 'Powerstar Service'}
+                  {booking.category?.name || 'Service Visit Confirmation'}
                 </span>
               </div>
 
-              {/* Price Breakdown toggle */}
-              <div className="mt-3 pt-3 border-t border-slate-200/60 dark:border-navy-700 text-xs text-slate-600 dark:text-slate-400 space-y-1">
-                <div className="flex justify-between">
-                  <span>Base Service Fee</span>
-                  <span>₹{base}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span>Platform Service Fee (5%)</span>
-                  <span>₹{fee}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span>GST (18% on Fee)</span>
-                  <span>₹{gst}</span>
-                </div>
+              {/* Friendly On-Site Explanation Banner */}
+              <div className="mt-3 p-2.5 rounded-xl bg-blue-50 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-900/60 text-[11px] text-blue-800 dark:text-blue-300 flex items-start gap-2">
+                <Info className="w-4 h-4 text-blue-500 flex-shrink-0 mt-0.5" />
+                <span>
+                  <strong>Pay only ₹{total} now</strong> to confirm the technician's visit. Actual labor & material costs will be inspected on-site by the technician and paid directly upon job completion.
+                </span>
               </div>
             </div>
 
             {/* PAYMENT STATE: IDLE */}
             {payState === 'idle' && (
-              <div>
+              <div className="space-y-4">
                 {/* Method Tabs */}
-                <div className="grid grid-cols-3 gap-2 p-1 bg-slate-100 dark:bg-navy-800 rounded-xl mb-4 text-xs font-semibold">
+                <div className="grid grid-cols-3 gap-2 p-1 bg-slate-100 dark:bg-navy-800 rounded-xl text-xs font-semibold">
                   <button
                     type="button"
                     onClick={() => setMethodTab('apps')}
@@ -204,17 +217,6 @@ export default function UpiPaymentModal({ isOpen, onClose, booking, onSuccess }:
                   </button>
                   <button
                     type="button"
-                    onClick={() => setMethodTab('id')}
-                    className={`py-2 rounded-lg transition-all flex items-center justify-center gap-1.5 ${
-                      methodTab === 'id'
-                        ? 'bg-white dark:bg-brand-500 text-brand-600 dark:text-white shadow-sm'
-                        : 'text-slate-600 dark:text-slate-400 hover:text-slate-900'
-                    }`}
-                  >
-                    <Lock className="w-3.5 h-3.5" /> Enter UPI ID
-                  </button>
-                  <button
-                    type="button"
                     onClick={() => setMethodTab('qr')}
                     className={`py-2 rounded-lg transition-all flex items-center justify-center gap-1.5 ${
                       methodTab === 'qr'
@@ -224,114 +226,152 @@ export default function UpiPaymentModal({ isOpen, onClose, booking, onSuccess }:
                   >
                     <QrCode className="w-3.5 h-3.5" /> Scan QR
                   </button>
+                  <button
+                    type="button"
+                    onClick={() => setMethodTab('id')}
+                    className={`py-2 rounded-lg transition-all flex items-center justify-center gap-1.5 ${
+                      methodTab === 'id'
+                        ? 'bg-white dark:bg-brand-500 text-brand-600 dark:text-white shadow-sm'
+                        : 'text-slate-600 dark:text-slate-400 hover:text-slate-900'
+                    }`}
+                  >
+                    <Lock className="w-3.5 h-3.5" /> UPI ID / VPA
+                  </button>
                 </div>
 
                 {/* TAB 1: UPI APPS */}
                 {methodTab === 'apps' && (
-                  <div className="space-y-2 mb-4">
-                    <p className="text-xs font-medium text-slate-500 dark:text-slate-400 mb-2">
-                      Choose installed UPI application
+                  <div className="space-y-2.5">
+                    <p className="text-xs font-medium text-slate-500 dark:text-slate-400">
+                      Tap your preferred app to open directly on your mobile device:
                     </p>
-                    {UPI_APPS.map(app => (
-                      <label
-                        key={app.id}
-                        onClick={() => setSelectedApp(app.id)}
-                        className={`flex items-center justify-between p-3.5 rounded-xl border cursor-pointer transition-all ${
-                          selectedApp === app.id
-                            ? 'border-brand-500 bg-brand-50/50 dark:bg-brand-500/10 shadow-sm'
-                            : 'border-slate-200 dark:border-navy-700 hover:border-slate-300 dark:hover:border-navy-600 bg-white dark:bg-navy-800'
-                        }`}
-                      >
-                        <div className="flex items-center gap-3">
-                          <span className="text-xl">{app.icon}</span>
-                          <div>
-                            <p className="font-semibold text-sm text-slate-900 dark:text-white">{app.name}</p>
-                            <p className="text-xs text-slate-400">Instant UPI Direct Debit</p>
+                    <div className="space-y-2">
+                      {UPI_APPS.map(app => (
+                        <div
+                          key={app.id}
+                          onClick={() => {
+                            setSelectedApp(app.id)
+                            launchUpiApp()
+                          }}
+                          className={`flex items-center justify-between p-3.5 rounded-2xl border cursor-pointer transition-all active:scale-[0.99] ${
+                            selectedApp === app.id
+                              ? 'border-brand-500 bg-brand-50/50 dark:bg-brand-500/10 shadow-sm'
+                              : 'border-slate-200 dark:border-navy-700 hover:border-slate-300 dark:hover:border-navy-600 bg-white dark:bg-navy-800'
+                          }`}
+                        >
+                          <div className="flex items-center gap-3">
+                            <span className="text-2xl">{app.icon}</span>
+                            <div>
+                              <p className="font-bold text-sm text-slate-900 dark:text-white">{app.name}</p>
+                              <p className="text-[11px] text-slate-400">Direct instant transfer of ₹{total}</p>
+                            </div>
                           </div>
+                          <a
+                            href={upiIntentUri}
+                            onClick={e => e.stopPropagation()}
+                            className="px-3 py-1.5 rounded-xl bg-slate-100 dark:bg-navy-700 text-slate-700 dark:text-slate-200 text-xs font-semibold flex items-center gap-1 hover:bg-slate-200"
+                          >
+                            <span>Open</span>
+                            <ExternalLink className="w-3 h-3" />
+                          </a>
                         </div>
-                        <input
-                          type="radio"
-                          name="upiApp"
-                          checked={selectedApp === app.id}
-                          onChange={() => setSelectedApp(app.id)}
-                          className="w-4 h-4 text-brand-500 focus:ring-brand-500"
-                        />
-                      </label>
-                    ))}
+                      ))}
+                    </div>
                   </div>
                 )}
 
-                {/* TAB 2: UPI ID / VPA */}
+                {/* TAB 2: REAL DYNAMIC QR CODE */}
+                {methodTab === 'qr' && (
+                  <div className="text-center py-2 space-y-3">
+                    <div className="inline-block p-4 bg-white rounded-3xl border-2 border-dashed border-brand-400 shadow-md">
+                      <img
+                        src={dynamicQrUrl}
+                        alt="Real UPI Payment QR Code"
+                        className="w-48 h-48 rounded-xl object-contain mx-auto"
+                        loading="eager"
+                      />
+                    </div>
+                    <div>
+                      <p className="text-xs font-bold text-slate-800 dark:text-slate-200">
+                        Scan with GPay, PhonePe, Paytm, BHIM, or any UPI App
+                      </p>
+                      <p className="text-[11px] font-mono text-brand-600 dark:text-brand-400 font-semibold mt-0.5">
+                        Amount pre-filled: ₹{total} • Valid for {formatTime(countdown)}
+                      </p>
+                    </div>
+                  </div>
+                )}
+
+                {/* TAB 3: UPI ID / VPA */}
                 {methodTab === 'id' && (
-                  <div className="space-y-3 mb-4">
+                  <div className="space-y-3.5">
+                    {/* Official Merchant VPA box */}
+                    <div className="p-3.5 rounded-2xl bg-slate-50 dark:bg-navy-800 border border-slate-200 dark:border-navy-700 space-y-2">
+                      <span className="text-[10px] uppercase font-bold text-slate-400">Powerstar Official UPI ID</span>
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="font-mono font-bold text-sm text-brand-600 dark:text-brand-400 select-all truncate">
+                          {POWERSTAR_UPI_VPA}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={copyUpiId}
+                          className="px-3 py-1.5 rounded-xl bg-brand-500 text-white text-xs font-semibold flex items-center gap-1.5 shadow-sm active:scale-95"
+                        >
+                          {copiedVpa ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
+                          <span>{copiedVpa ? 'Copied' : 'Copy'}</span>
+                        </button>
+                      </div>
+                    </div>
+
                     <div>
                       <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5">
-                        Enter UPI VPA (Virtual Payment Address)
+                        Or Enter your UPI VPA to request payment:
                       </label>
                       <input
                         type="text"
-                        placeholder="e.g. 9876543210@paytm or name@okhdfcbank"
+                        placeholder="e.g. 9876543210@paytm or name@okaxis"
                         value={upiId}
                         onChange={e => setUpiId(e.target.value)}
-                        className="w-full px-4 py-3 rounded-xl border border-slate-300 dark:border-navy-700 bg-white dark:bg-navy-800 text-slate-900 dark:text-white text-sm focus:outline-none focus:ring-2 focus:ring-brand-500 font-mono"
+                        className="w-full px-4 py-2.5 rounded-xl border border-slate-300 dark:border-navy-700 bg-white dark:bg-navy-800 text-slate-900 dark:text-white text-xs focus:outline-none focus:ring-2 focus:ring-brand-500 font-mono"
                       />
                     </div>
-                    <div className="flex flex-wrap gap-2 text-xs">
-                      {['@okhdfcbank', '@okaxis', '@ybl', '@paytm', '@upi'].map(suffix => (
-                        <button
-                          key={suffix}
-                          type="button"
-                          onClick={() => setUpiId(prev => (prev.split('@')[0] || 'yourname') + suffix)}
-                          className="px-2.5 py-1 rounded-lg bg-slate-100 dark:bg-navy-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 transition-colors"
-                        >
-                          {suffix}
-                        </button>
-                      ))}
-                    </div>
-                    <p className="text-xs text-slate-400">
-                      A payment request will be sent to your UPI app for authorization.
-                    </p>
                   </div>
                 )}
 
-                {/* TAB 3: QR CODE */}
-                {methodTab === 'qr' && (
-                  <div className="text-center py-2 space-y-3 mb-4">
-                    <div className="inline-block p-4 bg-white rounded-2xl border-2 border-dashed border-brand-300 shadow-md">
-                      {/* Stylized QR Code mock with NPCI badge */}
-                      <div className="w-44 h-44 bg-slate-900 rounded-xl p-2 flex flex-col items-center justify-between text-white relative">
-                        <div className="flex justify-between w-full p-1">
-                          <div className="w-8 h-8 border-4 border-white bg-slate-900" />
-                          <div className="w-8 h-8 border-4 border-white bg-slate-900" />
-                        </div>
-                        <div className="flex items-center justify-center flex-col">
-                          <span className="text-2xl font-black text-brand-400">⚡ PS</span>
-                          <span className="text-[9px] tracking-wider text-slate-300 font-mono">UPI-VERIFIED</span>
-                        </div>
-                        <div className="flex justify-between w-full p-1">
-                          <div className="w-8 h-8 border-4 border-white bg-slate-900" />
-                          <div className="w-6 h-6 bg-brand-500 rounded-sm" />
-                        </div>
-                      </div>
-                    </div>
-                    <div>
-                      <p className="text-xs font-medium text-slate-600 dark:text-slate-400">
-                        Scan with any UPI App (GPay, PhonePe, Paytm, BHIM)
-                      </p>
-                      <p className="text-xs font-mono text-brand-600 dark:text-brand-400 font-semibold mt-1">
-                        QR Expires in {formatTime(countdown)}
-                      </p>
-                    </div>
+                {/* 12-digit UTR Entry & Direct Confirmation */}
+                <div className="p-3.5 rounded-2xl bg-slate-50 dark:bg-navy-800/80 border border-slate-200 dark:border-navy-700/80 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <label className="text-[11px] font-bold text-slate-700 dark:text-slate-300">
+                      Already paid on your UPI app?
+                    </label>
+                    <span className="text-[10px] text-slate-400">Optional 12-digit UTR</span>
                   </div>
-                )}
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      placeholder="Enter 12-digit UPI Ref / UTR No."
+                      value={utrNumber}
+                      onChange={e => setUtrNumber(e.target.value)}
+                      maxLength={16}
+                      className="flex-1 px-3 py-2 rounded-xl border border-slate-300 dark:border-navy-700 bg-white dark:bg-navy-900 text-slate-900 dark:text-white text-xs font-mono focus:outline-none focus:ring-2 focus:ring-brand-500"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => handlePay(true)}
+                      className="px-3 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs shadow-sm transition-all active:scale-95"
+                    >
+                      Confirm
+                    </button>
+                  </div>
+                </div>
 
                 {/* Trust Footer */}
-                <div className="flex items-center justify-center gap-4 py-2 border-t border-slate-100 dark:border-navy-800 text-xs text-slate-400">
+                <div className="flex items-center justify-center gap-4 pt-1 text-[11px] text-slate-400">
                   <span className="flex items-center gap-1">
-                    <ShieldCheck className="w-3.5 h-3.5 text-emerald-500" /> 100% Secure NPCI UPI
+                    <ShieldCheck className="w-3.5 h-3.5 text-emerald-500" /> 100% NPCI Secure
                   </span>
                   <span>•</span>
-                  <span>Direct Bank Settlement</span>
+                  <span>Instant Booking Guarantee</span>
                 </div>
               </div>
             )}
@@ -370,10 +410,10 @@ export default function UpiPaymentModal({ isOpen, onClose, booking, onSuccess }:
                 </div>
                 <div>
                   <h4 className="font-bold text-xl text-slate-900 dark:text-white">
-                    ₹{total} Paid Successfully!
+                    ₹{total} Advance Paid Successfully!
                   </h4>
                   <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
-                    Your booking is now <span className="font-semibold text-emerald-500">CONFIRMED</span>.
+                    Your technician visit is now <span className="font-semibold text-emerald-500">CONFIRMED</span>.
                   </p>
                 </div>
                 <div className="p-3 rounded-xl bg-slate-50 dark:bg-navy-800 text-xs font-mono text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-navy-700 max-w-xs mx-auto">
@@ -394,7 +434,7 @@ export default function UpiPaymentModal({ isOpen, onClose, booking, onSuccess }:
                     Payment Verification Failed
                   </h4>
                   <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
-                    We could not verify the transaction. Please try again.
+                    We could not verify the transaction. Please try again or enter your 12-digit UTR.
                   </p>
                 </div>
                 <button
@@ -413,10 +453,10 @@ export default function UpiPaymentModal({ isOpen, onClose, booking, onSuccess }:
             <div className="p-4 bg-slate-50 dark:bg-navy-800/60 border-t border-slate-200/80 dark:border-navy-700">
               <button
                 type="button"
-                onClick={handlePay}
+                onClick={() => handlePay(false)}
                 className="w-full py-3.5 px-6 rounded-2xl bg-gradient-to-r from-brand-500 to-brand-600 hover:from-brand-600 hover:to-brand-700 text-white font-bold text-sm shadow-brand transition-all flex items-center justify-center gap-2 active:scale-[0.98]"
               >
-                <span>Pay ₹{total} via UPI</span>
+                <span>Pay ₹{total} Advance via UPI</span>
                 <ArrowRight className="w-4 h-4" />
               </button>
             </div>

@@ -70,8 +70,18 @@ export const PROVIDER_COUNTS: Record<string,number> = {
 }
 
 export function calcPrice(basePrice:number, hours=1, surge=1) {
-  const base = Math.round(basePrice * hours * surge)
-  const fee  = Math.round(base * 0.05)
-  const gst  = Math.round(fee * 0.18)
-  return { base, fee, gst, total: base+fee+gst, payout: Math.round(base*0.9) }
+  const estimatedWorkCost = Math.round(basePrice * hours * surge)
+  const base = 42
+  const fee = 0
+  const gst = 7
+  const total = 49 // Nominal advance booking / visiting charge (within ₹30-₹70 comfortable range)
+  return {
+    base,
+    fee,
+    gst,
+    total,
+    estimatedWorkCost,
+    advanceBookingFee: total,
+    payout: 42
+  }
 }

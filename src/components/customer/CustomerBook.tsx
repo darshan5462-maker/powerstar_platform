@@ -207,8 +207,12 @@ export default function CustomerBook() {
                 <span className="font-semibold text-slate-800 dark:text-slate-200">{district} ({city})</span>
               </div>
               <div className="flex items-center justify-between text-xs">
-                <span className="text-slate-500 dark:text-slate-400">Total Price</span>
-                <span className="font-extrabold text-brand-600 dark:text-brand-400">₹{pricing.total}</span>
+                <span className="text-slate-500 dark:text-slate-400">Advance Visiting Fee</span>
+                <span className="font-extrabold text-emerald-600 dark:text-emerald-400">₹{pricing.total} (Online UPI)</span>
+              </div>
+              <div className="flex items-center justify-between text-xs">
+                <span className="text-slate-500 dark:text-slate-400">Estimated Work Rate</span>
+                <span className="font-semibold text-slate-700 dark:text-slate-300">₹{pricing.estimatedWorkCost} (Paid on-site)</span>
               </div>
               <div className="flex items-center justify-between text-xs pt-1">
                 <span className="text-slate-500 dark:text-slate-400">Provider Selection</span>
@@ -222,7 +226,7 @@ export default function CustomerBook() {
             <div className="p-3.5 rounded-xl bg-blue-50 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-900/60 text-left flex items-start gap-2.5 text-xs text-blue-800 dark:text-blue-300">
               <Info className="w-4 h-4 flex-shrink-0 mt-0.5 text-blue-500" />
               <span>
-                <strong>What happens next?</strong> Once our admin assigns your technician, you will be notified to proceed with 100% secure UPI payment.
+                <strong>What happens next?</strong> Powerstar admin assigns your technician. You only pay the nominal ₹49 advance fee via UPI to confirm. The technician inspects the work on-site and the remaining service fee is paid after job completion.
               </span>
             </div>
 
@@ -363,10 +367,10 @@ export default function CustomerBook() {
                     </div>
                   </div>
                   <div className="text-right">
-                    <span className="text-sm font-extrabold text-brand-600 dark:text-brand-400">
-                      ₹{pricing.total}
+                    <span className="text-sm font-extrabold text-emerald-600 dark:text-emerald-400">
+                      ₹{pricing.total} Advance
                     </span>
-                    <span className="text-[10px] text-slate-400 block">Estimated Total</span>
+                    <span className="text-[10px] text-slate-400 block">+ ₹{pricing.estimatedWorkCost} on-site</span>
                   </div>
                 </div>
 
@@ -644,22 +648,27 @@ export default function CustomerBook() {
               </div>
 
               {/* Price Breakdown */}
-              <div className="p-4 rounded-2xl bg-slate-50 dark:bg-navy-800/80 border border-slate-200 dark:border-navy-700 space-y-2 text-xs">
+              <div className="p-4 rounded-2xl bg-slate-50 dark:bg-navy-800/80 border border-slate-200 dark:border-navy-700 space-y-2.5 text-xs">
                 <div className="flex justify-between text-slate-600 dark:text-slate-400">
-                  <span>Base Rate</span>
+                  <span>Nominal Visiting & Platform Fee</span>
                   <span>₹{pricing.base}</span>
                 </div>
                 <div className="flex justify-between text-slate-600 dark:text-slate-400">
-                  <span>Platform Fee (5%)</span>
-                  <span>₹{pricing.fee}</span>
-                </div>
-                <div className="flex justify-between text-slate-600 dark:text-slate-400">
-                  <span>GST (18% on fee)</span>
+                  <span>GST (18% on Visiting Fee)</span>
                   <span>₹{pricing.gst}</span>
                 </div>
                 <div className="pt-2 border-t border-slate-200 dark:border-navy-700 flex justify-between items-baseline font-bold text-sm text-slate-900 dark:text-white">
-                  <span>Total Estimated Price</span>
-                  <span className="text-lg font-black text-brand-600 dark:text-brand-400">₹{pricing.total}</span>
+                  <span>Payable Online (Advance Booking Fee)</span>
+                  <span className="text-lg font-black text-emerald-600 dark:text-emerald-400">₹{pricing.total}</span>
+                </div>
+
+                <div className="mt-2 pt-2.5 border-t border-dashed border-slate-200 dark:border-navy-700 flex justify-between items-center text-xs">
+                  <span className="text-slate-500 dark:text-slate-400">Estimated Work Rate (Paid on-site):</span>
+                  <span className="font-bold text-slate-800 dark:text-slate-200">₹{pricing.estimatedWorkCost}</span>
+                </div>
+
+                <div className="p-2.5 rounded-xl bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-900/40 text-[11px] text-emerald-800 dark:text-emerald-300">
+                  🛡️ <strong>Customer Friendly Guarantee:</strong> Pay only ₹{pricing.total} now to confirm your visit. The technician will inspect the actual work on arrival and the remaining service charges are paid directly after service completion!
                 </div>
               </div>
             </div>

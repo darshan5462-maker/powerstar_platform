@@ -199,10 +199,10 @@ export default function CustomerTrack() {
                           </div>
                           <div>
                             <h4 className="font-bold text-xs text-slate-900 dark:text-white">
-                              Provider Assigned! UPI Payment Required
+                              Provider Assigned! Pay ₹{currentBooking.total_amount} Advance Fee
                             </h4>
                             <p className="text-[11px] text-slate-500 dark:text-slate-400">
-                              Amount: ₹{currentBooking.total_amount} • 100% Secure via GPay, PhonePe, Paytm
+                              Nominal visit fee to confirm dispatch • Remaining work cost inspected & paid on-site
                             </p>
                           </div>
                         </div>
@@ -213,7 +213,7 @@ export default function CustomerTrack() {
                           className="px-4 py-2.5 rounded-xl bg-gradient-to-r from-brand-500 to-brand-600 hover:from-brand-600 hover:to-brand-700 text-white font-bold text-xs shadow-brand flex items-center justify-center gap-1.5 active:scale-95 transition-all flex-shrink-0"
                         >
                           <Zap className="w-3.5 h-3.5 fill-white" />
-                          <span>Pay ₹{currentBooking.total_amount} Now</span>
+                          <span>Pay ₹{currentBooking.total_amount} Advance</span>
                         </button>
                       </div>
                     )}
