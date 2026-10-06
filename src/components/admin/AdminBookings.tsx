@@ -19,7 +19,7 @@ import {
   ArrowRight
 } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
-import { getAllBookingsAdmin, getVerifiedProvidersList, assignProviderToBooking } from '@/services/api'
+import { getAllBookingsAdmin, getVerifiedProvidersList, assignProviderToBooking, isProviderMatchingTrade } from '@/services/api'
 import { Booking, ProviderProfile } from '@/types'
 import { StatusBadge } from '@/components/ui/Badge'
 import HeaderBar from '@/components/layout/HeaderBar'
@@ -363,124 +363,155 @@ export default function AdminBookings() {
               </div>
 
               {/* Modal Category Skill Filter */}
-              <div className="px-5 py-2.5 border-b border-slate-100 dark:border-navy-800 flex items-center justify-between gap-2 bg-slate-50/70 dark:bg-navy-800/50">
-                <span className="text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wide">
-                  Skill Match:
-                </span>
-                <div className="flex items-center gap-1.5">
-                  <button
-                    type="button"
-                    onClick={() => setCategoryOnlyFilter(true)}
-                    className={`px-3 py-1 rounded-xl text-xs font-bold transition-all ${
-                      categoryOnlyFilter
-                        ? 'bg-brand-500 text-white shadow-brand'
-                        : 'bg-white dark:bg-navy-700 text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-navy-600'
-                    }`}
-                  >
-                    ⚡ Only {selectedBookingForAssign.category?.name || 'Category'}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setCategoryOnlyFilter(false)}
-                    className={`px-3 py-1 rounded-xl text-xs font-bold transition-all ${
-                      !categoryOnlyFilter
-                        ? 'bg-brand-500 text-white shadow-brand'
-                        : 'bg-white dark:bg-navy-700 text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-navy-600'
-                    }`}
-                  >
-                    👥 All ({availableProviders.length})
-                  </button>
-                </div>
-              </div>
+              {(() => {
+                const reqCatName = selectedBookingForAssign.category?.name || 'Technician'
+                const reqCatKey = selectedBookingForAssign.category?.slug || selectedBookingForAssign.category_slug || reqCatName
+                const matchingList = availableProviders.filter((p: any) => p._isMatch || isProviderMatchingTrade(p, reqCatKey))
+                const displayedList = categoryOnlyFilter
+                  ? (matchingList.length > 0 ? matchingList : availableProviders)
+                  : availableProviders
 
-              {/* Modal Body: Providers List */}
-              <div className="p-5 overflow-y-auto flex-1 space-y-3">
-                {loadingProviders ? (
-                  <div className="py-12 text-center space-y-3">
-                    <div className="w-8 h-8 rounded-full border-2 border-brand-500 border-t-transparent animate-spin mx-auto" />
-                    <p className="text-xs text-slate-400">Loading verified providers…</p>
-                  </div>
-                ) : availableProviders.length === 0 ? (
-                  <div className="p-8 text-center bg-slate-50 dark:bg-navy-800 rounded-2xl text-xs text-slate-500 space-y-2">
-                    <AlertCircle className="w-8 h-8 text-amber-500 mx-auto" />
-                    <p className="font-bold text-slate-900 dark:text-white">No Providers in this District</p>
-                    <p className="text-slate-400">Add or verify service providers in {selectedBookingForAssign.district}.</p>
-                  </div>
-                ) : (
-                  availableProviders
-                    .filter((prov: any) => {
-                      if (!categoryOnlyFilter) return true
-                      const reqCat = (selectedBookingForAssign.category?.name || selectedBookingForAssign.category?.slug || '').toLowerCase()
-                      const provCat = (prov.category?.name || prov.category?.slug || '').toLowerCase()
-                      const provBio = (prov.bio || '').toLowerCase()
-                      const provSkills = (prov.skills_tags || []).map((s: string) => s.toLowerCase()).join(' ')
-                      const isMatch = prov._isMatch || provCat.includes(reqCat) || provBio.includes(reqCat) || provSkills.includes(reqCat)
-                      return isMatch
-                    })
-                    .map((prov: any) => {
-                      const reqCat = selectedBookingForAssign.category?.name || 'Technician'
-                      const isMatch =
-                        prov._isMatch ||
-                        (prov.category?.name && prov.category.name.toLowerCase().includes(reqCat.toLowerCase())) ||
-                        (prov.bio && prov.bio.toLowerCase().includes(reqCat.toLowerCase()))
-
-                      return (
-                        <div
-                          key={prov.id}
-                          className={`p-4 rounded-2xl border bg-white dark:bg-navy-800 transition-all flex flex-col sm:flex-row sm:items-center justify-between gap-3 ${
-                            isMatch
-                              ? 'border-brand-500/60 ring-1 ring-brand-500/20 bg-brand-50/5'
-                              : 'border-slate-200 dark:border-navy-700'
+                return (
+                  <>
+                    <div className="px-5 py-2.5 border-b border-slate-100 dark:border-navy-800 flex items-center justify-between gap-2 bg-slate-50/70 dark:bg-navy-800/50">
+                      <span className="text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wide">
+                        Skill Match:
+                      </span>
+                      <div className="flex items-center gap-1.5">
+                        <button
+                          type="button"
+                          onClick={() => setCategoryOnlyFilter(true)}
+                          className={`px-3 py-1 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 ${
+                            categoryOnlyFilter
+                              ? 'bg-brand-500 text-white shadow-brand'
+                              : 'bg-white dark:bg-navy-700 text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-navy-600'
                           }`}
                         >
-                          <div className="flex items-start gap-3">
-                            <div className="w-12 h-12 rounded-2xl bg-brand-500/10 border border-brand-500/30 text-brand-500 flex items-center justify-center text-xl font-bold flex-shrink-0">
-                              {prov.category?.icon || '👷'}
-                            </div>
-                            <div>
-                              <div className="flex items-center gap-2">
-                                <h4 className="font-bold text-sm text-slate-900 dark:text-white">
-                                  {prov.profile?.full_name || 'Verified Provider'}
-                                </h4>
-                                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">
-                                  KYC Verified
-                                </span>
-                                {isMatch && (
-                                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-brand-500/15 text-brand-600 dark:text-brand-400">
-                                    ⚡ {reqCat} Pro
-                                  </span>
-                                )}
-                              </div>
-                              <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-                                {prov.bio || `${prov.category?.name || reqCat} Specialist`} • {prov.experience_years || 5} yrs exp
-                              </p>
-                              <div className="flex items-center gap-3 mt-1.5 text-xs text-slate-600 dark:text-slate-300">
-                                <span className="flex items-center gap-1 font-bold text-amber-500">
-                                  <Star className="w-3.5 h-3.5 fill-amber-400" />
-                                  {prov.rating || 4.9} ({prov.total_jobs || 120} jobs)
-                                </span>
-                                <span>•</span>
-                                <span>📍 {prov.profile?.district || selectedBookingForAssign.district}</span>
-                                <span>•</span>
-                                <span className="font-mono">{prov.profile?.phone || '+91 98450 12345'}</span>
-                              </div>
-                            </div>
-                          </div>
+                          <span>⚡ Only {reqCatName}</span>
+                          <span className={`px-1.5 py-0.2 rounded-md text-[10px] ${
+                            categoryOnlyFilter ? 'bg-white/20 text-white' : 'bg-slate-100 dark:bg-navy-600 text-slate-600 dark:text-slate-300'
+                          }`}>
+                            {matchingList.length}
+                          </span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setCategoryOnlyFilter(false)}
+                          className={`px-3 py-1 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 ${
+                            !categoryOnlyFilter
+                              ? 'bg-brand-500 text-white shadow-brand'
+                              : 'bg-white dark:bg-navy-700 text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-navy-600'
+                          }`}
+                        >
+                          <span>👥 All</span>
+                          <span className={`px-1.5 py-0.2 rounded-md text-[10px] ${
+                            !categoryOnlyFilter ? 'bg-white/20 text-white' : 'bg-slate-100 dark:bg-navy-600 text-slate-600 dark:text-slate-300'
+                          }`}>
+                            {availableProviders.length}
+                          </span>
+                        </button>
+                      </div>
+                    </div>
 
-                          <button
-                            type="button"
-                            disabled={assigningProviderId === prov.id}
-                            onClick={() => handleConfirmAssign(prov.id)}
-                            className="px-4 py-2 rounded-xl bg-brand-500 hover:bg-brand-600 text-white font-bold text-xs shadow-brand transition-all flex items-center justify-center gap-1.5 disabled:opacity-50 flex-shrink-0"
-                          >
-                            <ShieldCheck className="w-4 h-4" />
-                            <span>{assigningProviderId === prov.id ? 'Assigning…' : `Assign ${reqCat}`}</span>
-                          </button>
+                    {/* Modal Body: Providers List */}
+                    <div className="p-5 overflow-y-auto flex-1 space-y-3">
+                      {loadingProviders ? (
+                        <div className="py-12 text-center space-y-3">
+                          <div className="w-8 h-8 rounded-full border-2 border-brand-500 border-t-transparent animate-spin mx-auto" />
+                          <p className="text-xs text-slate-400">Loading verified providers…</p>
                         </div>
-                      )
-                    })
-                )}
-              </div>
+                      ) : availableProviders.length === 0 ? (
+                        <div className="p-8 text-center bg-slate-50 dark:bg-navy-800 rounded-2xl text-xs text-slate-500 space-y-2">
+                          <AlertCircle className="w-8 h-8 text-amber-500 mx-auto" />
+                          <p className="font-bold text-slate-900 dark:text-white">No Providers in this District</p>
+                          <p className="text-slate-400">Add or verify service providers in {selectedBookingForAssign.district}.</p>
+                        </div>
+                      ) : (
+                        <>
+                          {categoryOnlyFilter && matchingList.length === 0 && (
+                            <div className="p-3.5 rounded-2xl bg-amber-500/10 border border-amber-500/20 text-amber-800 dark:text-amber-300 text-xs flex items-center gap-2.5">
+                              <AlertCircle className="w-4 h-4 flex-shrink-0 text-amber-500" />
+                              <span>
+                                No specialist registered specifically for <strong>{reqCatName}</strong> in {selectedBookingForAssign.district}. Showing all <strong>{availableProviders.length}</strong> available technicians.
+                              </span>
+                            </div>
+                          )}
+
+                          {displayedList.map((prov: any) => {
+                            const isMatch = prov._isMatch || isProviderMatchingTrade(prov, reqCatKey)
+                            const provTradeName = prov.category?.name || 'Technician'
+
+                            return (
+                              <div
+                                key={prov.id}
+                                className={`p-4 rounded-2xl border transition-all flex flex-col sm:flex-row sm:items-center justify-between gap-3 ${
+                                  isMatch
+                                    ? 'border-brand-500/60 ring-1 ring-brand-500/20 bg-brand-50/10 dark:bg-brand-950/10'
+                                    : 'border-slate-200 dark:border-navy-700 bg-white dark:bg-navy-800'
+                                }`}
+                              >
+                                <div className="flex items-start gap-3">
+                                  <div className="w-12 h-12 rounded-2xl bg-brand-500/10 border border-brand-500/30 text-brand-500 flex items-center justify-center text-xl font-bold flex-shrink-0">
+                                    {prov.category?.icon || '👷'}
+                                  </div>
+                                  <div>
+                                    <div className="flex items-center gap-2 flex-wrap">
+                                      <h4 className="font-bold text-sm text-slate-900 dark:text-white">
+                                        {prov.profile?.full_name || 'Verified Provider'}
+                                      </h4>
+                                      <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">
+                                        KYC Verified
+                                      </span>
+                                      <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                                        isMatch
+                                          ? 'bg-brand-500/15 text-brand-600 dark:text-brand-400 border border-brand-500/30'
+                                          : 'bg-slate-100 dark:bg-navy-700 text-slate-600 dark:text-slate-300'
+                                      }`}>
+                                        {prov.category?.icon || '👷'} {provTradeName} Pro
+                                      </span>
+                                    </div>
+                                    <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                                      {prov.bio || `${provTradeName} Specialist`} • {prov.experience_years || 5} yrs exp
+                                    </p>
+                                    <div className="flex items-center gap-3 mt-1.5 text-xs text-slate-600 dark:text-slate-300 flex-wrap">
+                                      <span className="flex items-center gap-1 font-bold text-amber-500">
+                                        <Star className="w-3.5 h-3.5 fill-amber-400" />
+                                        {prov.rating || 4.9} ({prov.total_jobs || 120} jobs)
+                                      </span>
+                                      <span>•</span>
+                                      <span>📍 {prov.profile?.district || selectedBookingForAssign.district}</span>
+                                      <span>•</span>
+                                      <span className="font-mono">{prov.profile?.phone || '+91 98450 12345'}</span>
+                                    </div>
+                                  </div>
+                                </div>
+
+                                <button
+                                  type="button"
+                                  disabled={assigningProviderId === prov.id}
+                                  onClick={() => handleConfirmAssign(prov.id)}
+                                  className={`px-4 py-2 rounded-xl font-bold text-xs shadow-brand transition-all flex items-center justify-center gap-1.5 disabled:opacity-50 flex-shrink-0 ${
+                                    isMatch
+                                      ? 'bg-brand-500 hover:bg-brand-600 text-white'
+                                      : 'bg-slate-800 hover:bg-slate-900 dark:bg-navy-700 dark:hover:bg-navy-600 text-white'
+                                  }`}
+                                >
+                                  <ShieldCheck className="w-4 h-4" />
+                                  <span>
+                                    {assigningProviderId === prov.id
+                                      ? 'Assigning…'
+                                      : `Assign ${isMatch ? reqCatName : (prov.profile?.full_name?.split(' ')[0] || provTradeName)}`}
+                                  </span>
+                                </button>
+                              </div>
+                            )
+                          })}
+                        </>
+                      )}
+                    </div>
+                  </>
+                )
+              })()}
             </motion.div>
           </div>
         </AnimatePresence>

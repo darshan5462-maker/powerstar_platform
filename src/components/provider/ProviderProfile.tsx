@@ -79,7 +79,20 @@ export default function ProviderProfile() {
           .maybeSingle()
 
         if (provData) {
-          if (provData.category?.slug) setSelectedTradeSlug(provData.category.slug)
+          let detectedTrade = provData.category?.slug
+          if (!detectedTrade && provData.category_id) {
+            const foundSvc = ALL_SERVICES.find(s => s.id === provData.category_id || s.name.toLowerCase() === provData.category_id.toLowerCase())
+            if (foundSvc) detectedTrade = foundSvc.id
+          }
+          if (!detectedTrade && Array.isArray(provData.skills_tags)) {
+            for (const svc of ALL_SERVICES) {
+              if (provData.skills_tags.some((t: string) => t.toLowerCase().includes(svc.id) || t.toLowerCase().includes(svc.name.toLowerCase()))) {
+                detectedTrade = svc.id
+                break
+              }
+            }
+          }
+          if (detectedTrade) setSelectedTradeSlug(detectedTrade)
           if (provData.experience_years) setExperience(String(provData.experience_years))
           if (provData.hourly_rate) setHourlyRate(String(provData.hourly_rate))
           if (provData.service_radius) setServiceRadius(String(provData.service_radius))
@@ -102,7 +115,6 @@ export default function ProviderProfile() {
   function handleSelectTrade(slug: string) {
     setSelectedTradeSlug(slug)
     const presets = SKILL_PRESETS_BY_TRADE[slug] || ['Certified Work', 'Fast Service', 'Local Expert']
-    // Add default presets for that trade if not already selected
     setSkillsTags(presets.slice(0, 4))
     const svc = ALL_SERVICES.find(s => s.id === slug)
     if (svc) {
@@ -144,7 +156,7 @@ export default function ProviderProfile() {
         const { data: catData } = await supabase
           .from('service_categories')
           .select('id')
-          .eq('slug', selectedTradeSlug)
+          .or(`slug.eq.${selectedTradeSlug},name.ilike.%${currentServiceObj.name}%`)
           .maybeSingle()
         if (catData?.id) categoryId = catData.id
       } catch (e) {
@@ -167,14 +179,17 @@ export default function ProviderProfile() {
         // ignore
       }
 
+      const finalBio = bio.trim() || `${currentServiceObj.name} Specialist with certified experience.`
+      const finalSkills = Array.from(new Set([currentServiceObj.name, selectedTradeSlug, ...skillsTags]))
+
       // 3. Upsert providers table
       const providerPayload: any = {
         id: profile.id,
-        bio,
+        bio: finalBio,
         experience_years: parseInt(experience, 10) || 1,
         hourly_rate: parseFloat(hourlyRate) || currentServiceObj.basePrice,
         service_radius: parseInt(serviceRadius, 10) || 25,
-        skills_tags: skillsTags,
+        skills_tags: finalSkills,
         kyc_status: 'verified',
         is_online: true,
         updated_at: new Date().toISOString()

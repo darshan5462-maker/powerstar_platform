@@ -585,20 +585,67 @@ export async function startServiceJob(
   enteredOtp?: string
 ): Promise<{ success: boolean; error?: string }> {
   try {
-    await supabase
-      .from('bookings')
-      .update({
-        status: 'in_progress',
-        started_at: new Date().toISOString()
-      })
-      .eq('id', bookingId)
+    const cleanEntered = (enteredOtp || '').trim()
+    if (!cleanEntered) {
+      return { success: false, error: 'Please enter the 4-digit Start OTP from the customer.' }
+    }
+
+    // Fetch booking to verify start_otp
+    let expectedOtp: string | null = null
+
+    try {
+      const { data: dbBooking } = await supabase
+        .from('bookings')
+        .select('id, start_otp, status')
+        .or(`id.eq.${bookingId},booking_ref.eq.${bookingId}`)
+        .maybeSingle()
+      if (dbBooking?.start_otp) {
+        expectedOtp = String(dbBooking.start_otp).trim()
+      }
+    } catch (e) {
+      // ignore
+    }
+
+    if (!expectedOtp) {
+      const localList = getLocalBookings()
+      const localBooking = localList.find(b => b.id === bookingId || b.booking_ref === bookingId)
+      if (localBooking?.start_otp) {
+        expectedOtp = String(localBooking.start_otp).trim()
+      }
+    }
+
+    // Fallback default
+    if (!expectedOtp) {
+      expectedOtp = '4821'
+    }
+
+    if (cleanEntered !== expectedOtp) {
+      return {
+        success: false,
+        error: `❌ Wrong Start OTP! Entered '${cleanEntered}' does not match customer's Start OTP.`
+      }
+    }
+
+    const nowIso = new Date().toISOString()
+    try {
+      await supabase
+        .from('bookings')
+        .update({
+          status: 'in_progress',
+          started_at: nowIso
+        })
+        .or(`id.eq.${bookingId},booking_ref.eq.${bookingId}`)
+    } catch (e) {
+      // ignore
+    }
 
     const localList = getLocalBookings()
     const updatedList = localList.map(b => {
-      if (b.id === bookingId) {
+      if (b.id === bookingId || b.booking_ref === bookingId) {
         return {
           ...b,
-          status: 'in_progress' as BookingStatus
+          status: 'in_progress' as BookingStatus,
+          started_at: nowIso
         }
       }
       return b
@@ -617,20 +664,66 @@ export async function completeServiceJob(
   enteredOtp?: string
 ): Promise<{ success: boolean; error?: string }> {
   try {
-    await supabase
-      .from('bookings')
-      .update({
-        status: 'completed',
-        completed_at: new Date().toISOString()
-      })
-      .eq('id', bookingId)
+    const cleanEntered = (enteredOtp || '').trim()
+    if (!cleanEntered) {
+      return { success: false, error: 'Please enter the 4-digit Completion OTP from the customer.' }
+    }
+
+    // Fetch booking to verify end_otp
+    let expectedOtp: string | null = null
+
+    try {
+      const { data: dbBooking } = await supabase
+        .from('bookings')
+        .select('id, end_otp, start_otp, status')
+        .or(`id.eq.${bookingId},booking_ref.eq.${bookingId}`)
+        .maybeSingle()
+      if (dbBooking?.end_otp) {
+        expectedOtp = String(dbBooking.end_otp).trim()
+      }
+    } catch (e) {
+      // ignore
+    }
+
+    if (!expectedOtp) {
+      const localList = getLocalBookings()
+      const localBooking = localList.find(b => b.id === bookingId || b.booking_ref === bookingId)
+      if (localBooking?.end_otp) {
+        expectedOtp = String(localBooking.end_otp).trim()
+      }
+    }
+
+    if (!expectedOtp) {
+      expectedOtp = '9273'
+    }
+
+    if (cleanEntered !== expectedOtp) {
+      return {
+        success: false,
+        error: `❌ Wrong End OTP! Entered '${cleanEntered}' does not match customer's Completion OTP.`
+      }
+    }
+
+    const nowIso = new Date().toISOString()
+    try {
+      await supabase
+        .from('bookings')
+        .update({
+          status: 'completed',
+          completed_at: nowIso
+        })
+        .or(`id.eq.${bookingId},booking_ref.eq.${bookingId}`)
+    } catch (e) {
+      // ignore
+    }
 
     const localList = getLocalBookings()
     const updatedList = localList.map(b => {
-      if (b.id === bookingId) {
+      if (b.id === bookingId || b.booking_ref === bookingId) {
         return {
           ...b,
-          status: 'completed' as BookingStatus
+          status: 'completed' as BookingStatus,
+          completed_at: nowIso
         }
       }
       return b
@@ -668,6 +761,114 @@ export async function submitReview(payload: {
 // ==========================================
 // 7. PROVIDERS LISTING & VERIFICATION
 // ==========================================
+export const TRADE_KEYWORDS: Record<string, string[]> = {
+  electrician: ['electrician', 'electric', 'wiring', 'wire', 'mcb', 'inverter', 'switch', 'light', 'fan', 'ac', 'appliance', 'fuse'],
+  plumber: ['plumber', 'plumbing', 'pipe', 'leak', 'drain', 'tank', 'tap', 'bathroom', 'sanitary', 'faucet'],
+  mason: ['mason', 'gowndi', 'brick', 'plaster', 'concrete', 'cement', 'rcc', 'construction', 'building'],
+  centring: ['centring', 'centering', 'shuttering', 'formwork', 'slab'],
+  'tile-worker': ['tile', 'marble', 'granite', 'flooring'],
+  construction: ['construction', 'labor', 'building', 'concrete'],
+  cleaning: ['clean', 'cleaning', 'deep clean', 'maid', 'housekeeping', 'sofa', 'sanitiz'],
+  shifting: ['shifting', 'packers', 'movers', 'transport', 'loading'],
+  groundwork: ['ground', 'earth', 'digging', 'trench', 'foundation'],
+  driver: ['driver', 'driving', 'chauffeur', 'cab', 'car', 'vehicle'],
+  helper: ['helper', 'assistant', 'general'],
+  loading: ['loading', 'unloading', 'heavy lifting', 'warehouse'],
+  hospital: ['hospital', 'patient', 'ward boy', 'attendant'],
+  garment: ['garment', 'tailor', 'stitching', 'cutting', 'fabric'],
+  hotel: ['hotel', 'waiter', 'cook', 'kitchen', 'housekeeping'],
+  office: ['office', 'peon', 'data entry', 'clerk'],
+  'financial-worker': ['financial', 'loan', 'recovery', 'collection'],
+  agriculture: ['agriculture', 'farm', 'harvest', 'crop', 'irrigation'],
+  delivery: ['delivery', 'courier', 'parcel'],
+  security: ['security', 'guard', 'watchman'],
+  'tata-ace': ['tata ace', 'ace', 'mini truck', 'chhota hathi'],
+  bolero: ['bolero', 'pickup'],
+  'tata-intra': ['tata intra', 'intra'],
+  'truck-407': ['407', 'truck'],
+  lorry: ['lorry', 'heavy truck'],
+  tempo: ['tempo', 'van'],
+  tractor: ['tractor'],
+  jcb: ['jcb', 'backhoe', 'excavator'],
+  hitachi: ['hitachi', 'excavator'],
+  crane: ['crane', 'lifting'],
+  tanker: ['tanker', 'water tanker'],
+  auto: ['auto', 'auto riksha', 'three wheeler'],
+  riksha: ['riksha', 'rickshaw']
+}
+
+export function isProviderMatchingTrade(provider: any, requestedTradeOrCategory?: string): boolean {
+  if (!requestedTradeOrCategory) return true
+  const reqStr = requestedTradeOrCategory.trim().toLowerCase()
+  
+  let targetKey = reqStr
+  for (const key of Object.keys(TRADE_KEYWORDS)) {
+    if (key === reqStr || TRADE_KEYWORDS[key].some(kw => reqStr.includes(kw) || kw.includes(reqStr))) {
+      targetKey = key
+      break
+    }
+  }
+
+  const keywords = TRADE_KEYWORDS[targetKey] || [targetKey, reqStr]
+
+  const provCatSlug = (provider.category?.slug || '').toLowerCase()
+  const provCatName = (provider.category?.name || '').toLowerCase()
+  const provCatId = (provider.category_id || '').toLowerCase()
+  const provBio = (provider.bio || '').toLowerCase()
+  const provSkills = (provider.skills_tags || []).map((s: string) => String(s).toLowerCase()).join(' ')
+  const provName = (provider.profile?.full_name || '').toLowerCase()
+
+  const combinedText = `${provCatSlug} ${provCatName} ${provCatId} ${provBio} ${provSkills} ${provName}`
+
+  return keywords.some(kw => combinedText.includes(kw))
+}
+
+export function resolveProviderCategory(prov: any): { id: string; name: string; icon: string; slug: string } {
+  if (prov.category?.name && prov.category?.slug && prov.category?.icon) {
+    return {
+      id: prov.category.id || prov.category.slug,
+      name: prov.category.name,
+      icon: prov.category.icon,
+      slug: prov.category.slug
+    }
+  }
+
+  const provBio = (prov.bio || '').toLowerCase()
+  const provSkills = (prov.skills_tags || []).map((s: string) => String(s).toLowerCase()).join(' ')
+  const provName = (prov.profile?.full_name || '').toLowerCase()
+  const provCatId = (prov.category_id || '').toLowerCase()
+  const combined = `${provCatId} ${provBio} ${provSkills} ${provName}`
+
+  // Check direct service match
+  for (const svc of ALL_SERVICES) {
+    if (provCatId === svc.id.toLowerCase() || provCatId === svc.name.toLowerCase()) {
+      return { id: svc.id, name: svc.name, icon: svc.icon, slug: svc.id }
+    }
+  }
+
+  // Check trade keywords
+  for (const [slug, keywords] of Object.entries(TRADE_KEYWORDS)) {
+    if (keywords.some(kw => combined.includes(kw))) {
+      const matchedService = ALL_SERVICES.find(s => s.id === slug)
+      if (matchedService) {
+        return {
+          id: matchedService.id,
+          name: matchedService.name,
+          icon: matchedService.icon,
+          slug: matchedService.id
+        }
+      }
+    }
+  }
+
+  return {
+    id: 'technician',
+    name: 'Technician',
+    icon: '👷',
+    slug: 'technician'
+  }
+}
+
 export async function getVerifiedProvidersList(
   district?: string,
   categorySlugOrId?: string
@@ -688,6 +889,16 @@ export async function getVerifiedProvidersList(
       list = getMockVerifiedProviders(district, categorySlugOrId)
     }
 
+    // Resolve category and icons for every provider
+    list = list.map(p => {
+      const resolvedCat = resolveProviderCategory(p)
+      return {
+        ...p,
+        category: resolvedCat,
+        bio: p.bio || `${resolvedCat.name} Specialist`
+      }
+    })
+
     // Filter by district if provided
     if (district) {
       const norm = district.trim().toLowerCase()
@@ -699,24 +910,11 @@ export async function getVerifiedProvidersList(
 
     // Prioritize and tag matching service category providers
     if (categorySlugOrId) {
-      const catNorm = categorySlugOrId.trim().toLowerCase()
       list = list.map(p => {
-        const pCatSlug = p.category?.slug?.toLowerCase() || ''
-        const pCatName = p.category?.name?.toLowerCase() || ''
-        const pBio = p.bio?.toLowerCase() || ''
-        const pSkills = (p.skills_tags || []).map(s => s.toLowerCase()).join(' ')
-        const pName = p.profile?.full_name?.toLowerCase() || ''
-
-        const isExactMatch =
-          pCatSlug === catNorm ||
-          pCatName.includes(catNorm) ||
-          pBio.includes(catNorm) ||
-          pSkills.includes(catNorm) ||
-          pName.includes(catNorm)
-
+        const isMatch = isProviderMatchingTrade(p, categorySlugOrId)
         return {
           ...p,
-          _isMatch: isExactMatch
+          _isMatch: isMatch
         } as any
       })
 
@@ -726,7 +924,14 @@ export async function getVerifiedProvidersList(
 
     return list
   } catch (err) {
-    return getMockVerifiedProviders(district, categorySlugOrId)
+    return getMockVerifiedProviders(district, categorySlugOrId).map(p => {
+      const resolvedCat = resolveProviderCategory(p)
+      return {
+        ...p,
+        category: resolvedCat,
+        _isMatch: categorySlugOrId ? isProviderMatchingTrade(p, categorySlugOrId) : true
+      }
+    })
   }
 }
 
