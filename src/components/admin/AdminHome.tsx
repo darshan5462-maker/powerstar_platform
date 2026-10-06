@@ -59,11 +59,14 @@ export default function AdminHome() {
     }
   }, [])
 
-  const pendingAssignment = bookings.filter(b => b.status === 'pending_admin')
-  const providerAssigned = bookings.filter(b => b.status === 'provider_assigned')
-  const paymentPending = bookings.filter(b => b.status === 'payment_pending')
-  const confirmed = bookings.filter(b => b.status === 'confirmed' || b.status === 'in_progress')
-  const completed = bookings.filter(b => b.status === 'completed')
+  const pendingAssignment = bookings.filter(b => {
+    const s = (b.status || '').toLowerCase()
+    return (['pending_admin', 'pending', 'requested', 'unassigned'].includes(s) || !b.provider_id) && !['cancelled', 'rejected', 'completed', 'in_progress', 'confirmed', 'payment_pending', 'provider_assigned'].includes(s)
+  })
+  const providerAssigned = bookings.filter(b => ['provider_assigned', 'accepted'].includes((b.status || '').toLowerCase()))
+  const paymentPending = bookings.filter(b => ['payment_pending', 'payment_due'].includes((b.status || '').toLowerCase()))
+  const confirmed = bookings.filter(b => ['confirmed', 'in_progress', 'active', 'payment_success'].includes((b.status || '').toLowerCase()))
+  const completed = bookings.filter(b => ['completed', 'settled', 'done'].includes((b.status || '').toLowerCase()))
 
   const totalRevenue = completed.reduce((acc, b) => acc + (b.total_amount || 0), 0)
   const totalPlatformFees = completed.reduce((acc, b) => acc + (b.platform_fee || Math.round((b.total_amount || 0) * 0.05)), 0)
