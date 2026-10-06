@@ -21,7 +21,22 @@ interface UpiPaymentModalProps {
   onSuccess: () => void
 }
 
-const POWERSTAR_UPI_VPA = 'powerstar.services@upi'
+function getMerchantUpiConfig() {
+  try {
+    const saved = localStorage.getItem('ps_admin_upi_settings')
+    if (saved) {
+      const parsed = JSON.parse(saved)
+      return {
+        vpa: parsed.merchant_upi_id || 'powerstar.services@upi',
+        name: parsed.merchant_name || 'POWERSTAR SERVICES'
+      }
+    }
+  } catch (e) {}
+  return {
+    vpa: (import.meta as any).env?.VITE_ADMIN_UPI_ID || 'powerstar.services@upi',
+    name: (import.meta as any).env?.VITE_ADMIN_MERCHANT_NAME || 'POWERSTAR SERVICES'
+  }
+}
 
 const UPI_APPS = [
   { id: 'phonepe', name: 'PhonePe', icon: '🟣', scheme: 'phonepe://pay', color: '#5f259f', bg: '#f3e8ff' },
@@ -41,10 +56,11 @@ export default function UpiPaymentModal({ isOpen, onClose, booking, onSuccess }:
   const [countdown, setCountdown] = useState(180)
   const [txnRef, setTxnRef] = useState('')
 
+  const merchant = getMerchantUpiConfig()
   const total = booking.total_amount || 49
 
   // Real UPI deep link format per NPCI standard
-  const upiIntentUri = `upi://pay?pa=${encodeURIComponent(POWERSTAR_UPI_VPA)}&pn=POWERSTAR%20SERVICES&am=${total.toFixed(2)}&tn=Booking-${encodeURIComponent(booking.booking_ref || 'PS')}&cu=INR`
+  const upiIntentUri = `upi://pay?pa=${encodeURIComponent(merchant.vpa)}&pn=${encodeURIComponent(merchant.name)}&am=${total.toFixed(2)}&tn=Booking-${encodeURIComponent(booking.booking_ref || 'PS')}&cu=INR`
   const dynamicQrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=${encodeURIComponent(upiIntentUri)}`
 
   useEffect(() => {
@@ -66,7 +82,7 @@ export default function UpiPaymentModal({ isOpen, onClose, booking, onSuccess }:
   }, [isOpen, payState])
 
   const copyUpiId = () => {
-    navigator.clipboard.writeText(POWERSTAR_UPI_VPA)
+    navigator.clipboard.writeText(merchant.vpa)
     setCopiedVpa(true)
     toast.success('UPI ID copied to clipboard!')
     setTimeout(() => setCopiedVpa(false), 2500)
@@ -82,7 +98,7 @@ export default function UpiPaymentModal({ isOpen, onClose, booking, onSuccess }:
   }
 
   async function handlePay(isManualConfirmation = false) {
-    let resolvedVpa = POWERSTAR_UPI_VPA
+    let resolvedVpa = merchant.vpa
     if (methodTab === 'id' && upiId.trim()) {
       resolvedVpa = upiId.trim()
     }
@@ -310,7 +326,7 @@ export default function UpiPaymentModal({ isOpen, onClose, booking, onSuccess }:
                       <span className="text-[10px] uppercase font-bold text-slate-400">Powerstar Official UPI ID</span>
                       <div className="flex items-center justify-between gap-2">
                         <span className="font-mono font-bold text-sm text-brand-600 dark:text-brand-400 select-all truncate">
-                          {POWERSTAR_UPI_VPA}
+                          {merchant.vpa}
                         </span>
                         <button
                           type="button"
