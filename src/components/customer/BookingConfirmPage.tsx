@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuthStore } from '@/store/authStore'
 import { supabase } from '@/lib/supabase'
+import { initiateRazorpayCheckout } from '@/services/razorpay'
 import Avatar from '@/components/ui/Avatar'
 import toast from 'react-hot-toast'
 
@@ -74,47 +75,18 @@ export default function BookingConfirmPage({
   async function handleRazorpay() {
     setLoading(true)
     try {
-      const RZPKEY = import.meta.env.VITE_RAZORPAY_KEY_ID
-      if (!RZPKEY) {
-        // Demo mode — no key configured, create booking directly
-        toast('Demo mode: Payment gateway not configured', { icon: 'ℹ️' })
-        const booking = await createBookingRecord()
-        setBookingRef(booking.booking_ref)
-        setBookingOtp(booking.start_otp ?? '----')
-        setDone(true)
-        setLoading(false)
-        return
-      }
-
-      const loaded = await loadRazorpay()
-      if (!loaded) { toast.error('Payment service unavailable'); setLoading(false); return }
-
       const booking = await createBookingRecord()
-
-      const options = {
-        key:         RZPKEY,
-        amount:      Math.round(price.total * 100),
-        currency:    'INR',
-        name:        'POWERSTAR',
+      await initiateRazorpayCheckout({
+        amount: price.total,
+        bookingId: booking.id,
+        bookingRef: booking.booking_ref,
+        customerName: profile?.full_name,
+        customerPhone: profile?.phone ?? '',
         description: `${svc.name} - ${district}`,
-        image:       'https://powerstar-platform-4sap.vercel.app/icon.png',
-        prefill:     { name: profile!.full_name, contact: profile!.phone ?? '' },
-        notes:       { booking_id: booking.id },
-        theme:       { color: '#f97316' },
-        config: {
-          display: {
-            blocks: {
-              upi:    { name: 'Pay via UPI',  instruments: [{ method: 'upi' }] },
-              card:   { name: 'Pay via Card', instruments: [{ method: 'card' }] },
-              wallet: { name: 'Wallets',      instruments: [{ method: 'wallet' }] },
-            },
-            sequence:  payMethod === 'upi' ? ['block.upi'] : payMethod === 'card' ? ['block.card'] : ['block.wallet'],
-            preferences: { show_default_blocks: false },
-          }
-        },
-        handler: async (response: any) => {
+        onSuccess: async (result) => {
           await supabase.from('bookings').update({
-            customer_notes: (notes ? notes + ' | ' : '') + `rzp:${response.razorpay_payment_id}`,
+            status: 'confirmed',
+            customer_notes: (notes ? notes + ' | ' : '') + `rzp:${result.paymentId}`,
           }).eq('id', booking.id)
           setBookingRef(booking.booking_ref)
           setBookingOtp(booking.start_otp ?? '----')
@@ -122,17 +94,20 @@ export default function BookingConfirmPage({
           setLoading(false)
           toast.success('Payment successful! Booking confirmed 🎉')
         },
-        modal: {
-          ondismiss: async () => {
-            await supabase.from('bookings').update({ status: 'cancelled' }).eq('id', booking.id)
-            toast.error('Payment cancelled')
-            setLoading(false)
-          }
+        onError: () => {
+          setLoading(false)
+        },
+        onDismiss: async () => {
+          await supabase.from('bookings').update({ status: 'cancelled' }).eq('id', booking.id)
+          toast.error('Payment cancelled')
+          setLoading(false)
         }
-      }
-
-      const rzp = new (window as any).Razorpay(options)
-      rzp.open()
+      })
+    } catch (err: any) {
+      toast.error(err?.message || 'Payment initiation failed')
+      setLoading(false)
+    }
+  }
 
     } catch (err: any) {
       toast.error(err?.message || 'Payment failed')
