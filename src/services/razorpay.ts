@@ -41,7 +41,7 @@ export async function loadRazorpayScript(): Promise<boolean> {
  */
 export async function initiateRazorpayCheckout(params: RazorpayCheckoutParams) {
   try {
-    const keyId = import.meta.env.VITE_RAZORPAY_KEY_ID || 'rzp_test_TmCAeyVSADDUn4'
+    const keyId = import.meta.env.VITE_RAZORPAY_KEY_ID || 'rzp_live_TmCzHLf6iH8eGT'
 
     const scriptLoaded = await loadRazorpayScript()
     if (!scriptLoaded) {

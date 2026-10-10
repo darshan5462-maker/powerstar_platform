@@ -319,9 +319,9 @@ export default function CustomerHome() {
 
                 <div className="pt-3 border-t border-slate-100 dark:border-navy-800 flex items-center justify-between">
                   <div>
-                    <span className="text-[10px] text-slate-400 uppercase font-semibold block">Starting from</span>
-                    <span className="text-sm font-extrabold text-slate-900 dark:text-white">
-                      ₹{service.basePrice}{service.unit}
+                    <span className="text-[10px] text-slate-400 uppercase font-semibold block">Booking Fee</span>
+                    <span className="text-sm font-extrabold text-emerald-600 dark:text-emerald-400">
+                      ₹11
                     </span>
                   </div>
 

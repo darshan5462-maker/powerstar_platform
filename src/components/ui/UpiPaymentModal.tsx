@@ -58,7 +58,7 @@ export default function UpiPaymentModal({ isOpen, onClose, booking, onSuccess }:
   const [txnRef, setTxnRef] = useState('')
 
   const merchant = getMerchantUpiConfig()
-  const total = booking.total_amount || 49
+  const total = booking.total_amount || 11
 
   // Real UPI deep link format per NPCI standard
   const upiIntentUri = `upi://pay?pa=${encodeURIComponent(merchant.vpa)}&pn=${encodeURIComponent(merchant.name)}&am=${total.toFixed(2)}&tn=Booking-${encodeURIComponent(booking.booking_ref || 'PS')}&cu=INR`

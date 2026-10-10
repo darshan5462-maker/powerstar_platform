@@ -69,19 +69,15 @@ export const PROVIDER_COUNTS: Record<string,number> = {
   lorry:72,tempo:40,tractor:85,jcb:18,hitachi:12,crane:8,tanker:24,auto:180,riksha:95,
 }
 
-export function calcPrice(basePrice:number, hours=1, surge=1) {
-  const estimatedWorkCost = Math.round(basePrice * hours * surge)
-  const base = 42
-  const fee = 0
-  const gst = 7
-  const total = 49 // Nominal advance booking / visiting charge (within ₹30-₹70 comfortable range)
+export function calcPrice(_basePrice?: number, _hours = 1, _surge = 1) {
+  const total = 11 // Nominal booking / token platform charge (₹11)
   return {
-    base,
-    fee,
-    gst,
+    base: 11,
+    fee: 0,
+    gst: 0,
     total,
-    estimatedWorkCost,
+    estimatedWorkCost: 0,
     advanceBookingFee: total,
-    payout: 42
+    payout: 11
   }
 }

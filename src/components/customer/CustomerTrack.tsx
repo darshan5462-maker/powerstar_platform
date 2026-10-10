@@ -399,16 +399,8 @@ export default function CustomerTrack() {
                         </span>
                       </div>
                       <div className="flex justify-between">
-                        <span>Base Amount</span>
-                        <span>₹{currentBooking.base_amount}</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span>Platform Fee (5%)</span>
-                        <span>₹{currentBooking.platform_fee}</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span>GST (18%)</span>
-                        <span>₹{currentBooking.gst_amount}</span>
+                        <span>Advance Booking Fee</span>
+                        <span className="font-semibold text-slate-900 dark:text-white">₹{currentBooking.total_amount}</span>
                       </div>
                       <div className="pt-2 border-t border-slate-200 dark:border-navy-700 flex justify-between font-bold text-sm text-slate-900 dark:text-white">
                         <span>Total Paid / Payable</span>

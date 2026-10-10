@@ -246,9 +246,9 @@ export default function LandingPage() {
 
               <div className="pt-3 border-t border-slate-100 dark:border-navy-800 flex items-center justify-between">
                 <div>
-                  <span className="text-[10px] text-slate-400 uppercase font-semibold block">Base Pricing</span>
-                  <span className="text-sm font-black text-brand-600 dark:text-brand-400">
-                    ₹{s.basePrice}{s.unit}
+                  <span className="text-[10px] text-slate-400 uppercase font-semibold block">Booking Fee</span>
+                  <span className="text-sm font-black text-emerald-600 dark:text-emerald-400">
+                    ₹11
                   </span>
                 </div>
 
