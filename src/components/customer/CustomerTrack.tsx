@@ -13,7 +13,8 @@ import {
   Activity,
   AlertCircle,
   KeyRound,
-  FileText
+  FileText,
+  CreditCard
 } from 'lucide-react'
 import { useAuthStore } from '@/store/authStore'
 import { supabase } from '@/lib/supabase'
@@ -194,15 +195,15 @@ export default function CustomerTrack() {
                     {(currentBooking.status === 'provider_assigned' || currentBooking.status === 'payment_pending') && (
                       <div className="p-4 rounded-2xl bg-brand-500/10 border border-brand-500/30 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                         <div className="flex items-center gap-2.5">
-                          <div className="w-9 h-9 rounded-xl bg-brand-500 text-white flex items-center justify-center font-bold text-sm shadow-brand flex-shrink-0">
-                            UPI
+                          <div className="w-9 h-9 rounded-xl bg-brand-500 text-white flex items-center justify-center font-bold text-xs shadow-brand flex-shrink-0">
+                            PAY
                           </div>
                           <div>
                             <h4 className="font-bold text-xs text-slate-900 dark:text-white">
-                              Provider Assigned! Pay ₹{currentBooking.total_amount} Advance Fee
+                              Provider Assigned! Pay ₹{currentBooking.total_amount === 49 ? 11 : (currentBooking.total_amount || 11)} Booking Fee
                             </h4>
                             <p className="text-[11px] text-slate-500 dark:text-slate-400">
-                              Nominal visit fee to confirm dispatch • Remaining work cost inspected & paid on-site
+                              Nominal visit fee via Razorpay • Remaining work charges inspected & quoted on-site
                             </p>
                           </div>
                         </div>
@@ -212,8 +213,8 @@ export default function CustomerTrack() {
                           onClick={() => setPayModalOpen(true)}
                           className="px-4 py-2.5 rounded-xl bg-gradient-to-r from-brand-500 to-brand-600 hover:from-brand-600 hover:to-brand-700 text-white font-bold text-xs shadow-brand flex items-center justify-center gap-1.5 active:scale-95 transition-all flex-shrink-0"
                         >
-                          <Zap className="w-3.5 h-3.5 fill-white" />
-                          <span>Pay ₹{currentBooking.total_amount} Advance</span>
+                          <CreditCard className="w-3.5 h-3.5" />
+                          <span>Pay ₹{currentBooking.total_amount === 49 ? 11 : (currentBooking.total_amount || 11)} with Razorpay</span>
                         </button>
                       </div>
                     )}
@@ -400,12 +401,12 @@ export default function CustomerTrack() {
                       </div>
                       <div className="flex justify-between">
                         <span>Advance Booking Fee</span>
-                        <span className="font-semibold text-slate-900 dark:text-white">₹{currentBooking.total_amount}</span>
+                        <span className="font-semibold text-slate-900 dark:text-white">₹{currentBooking.total_amount === 49 ? 11 : (currentBooking.total_amount || 11)}</span>
                       </div>
                       <div className="pt-2 border-t border-slate-200 dark:border-navy-700 flex justify-between font-bold text-sm text-slate-900 dark:text-white">
                         <span>Total Paid / Payable</span>
                         <span className="text-brand-600 dark:text-brand-400 font-black">
-                          ₹{currentBooking.total_amount}
+                          ₹{currentBooking.total_amount === 49 ? 11 : (currentBooking.total_amount || 11)}
                         </span>
                       </div>
                     </div>

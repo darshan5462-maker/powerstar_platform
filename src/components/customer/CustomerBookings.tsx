@@ -11,7 +11,8 @@ import {
   ArrowRight,
   Star,
   CheckCircle2,
-  AlertCircle
+  AlertCircle,
+  CreditCard
 } from 'lucide-react'
 import { useAuthStore } from '@/store/authStore'
 import { getCustomerBookings } from '@/services/api'
@@ -208,9 +209,9 @@ export default function CustomerBookings() {
                     </div>
 
                     <div>
-                      <span className="text-[10px] text-slate-400 uppercase font-semibold block">Advance Fee</span>
+                      <span className="text-[10px] text-slate-400 uppercase font-semibold block">Booking Fee</span>
                       <p className="font-extrabold text-emerald-600 dark:text-emerald-400 text-sm mt-0.5">
-                        ₹{booking.total_amount}
+                        ₹{booking.total_amount === 49 ? 11 : (booking.total_amount || 11)}
                       </p>
                     </div>
 
@@ -248,8 +249,8 @@ export default function CustomerBookings() {
                           onClick={() => setPayModalBooking(booking)}
                           className="px-4 py-2 rounded-xl bg-gradient-to-r from-brand-500 to-brand-600 hover:from-brand-600 hover:to-brand-700 text-white font-bold text-xs shadow-brand flex items-center gap-1.5 active:scale-95 transition-all"
                         >
-                          <Zap className="w-3.5 h-3.5 fill-white" />
-                          <span>Pay ₹{booking.total_amount} Advance</span>
+                          <CreditCard className="w-3.5 h-3.5" />
+                          <span>Pay ₹{booking.total_amount === 49 ? 11 : (booking.total_amount || 11)} with Razorpay</span>
                         </button>
                       )}
 

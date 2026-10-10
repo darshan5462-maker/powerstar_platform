@@ -7,7 +7,21 @@ const LOCAL_BOOKINGS_KEY = 'ps_bookings_sync_v2'
 function getLocalBookings(): Booking[] {
   try {
     const raw = localStorage.getItem(LOCAL_BOOKINGS_KEY)
-    return raw ? JSON.parse(raw) : []
+    const list: Booking[] = raw ? JSON.parse(raw) : []
+    let modified = false
+    list.forEach(b => {
+      if (b.total_amount === 49 || b.base_amount === 49) {
+        b.total_amount = 11
+        b.base_amount = 11
+        b.platform_fee = 0
+        b.gst_amount = 0
+        modified = true
+      }
+    })
+    if (modified) {
+      saveLocalBookings(list)
+    }
+    return list
   } catch (e) {
     return []
   }
@@ -334,8 +348,12 @@ export async function getAllBookingsAdmin(): Promise<Booking[]> {
 
     const enrichedDbList: Booking[] = dbBookings.map(b => {
       const staticSvc = ALL_SERVICES.find(s => s.id === b.category_id || s.id === b.category_slug) || ALL_SERVICES[0]
+      const totalAmount = (b.total_amount === 49 || b.base_amount === 49) ? 11 : (b.total_amount || 11)
+      const baseAmount = (b.base_amount === 49 || b.total_amount === 49) ? 11 : (b.base_amount || 11)
       return {
         ...b,
+        total_amount: totalAmount,
+        base_amount: baseAmount,
         category: b.category || {
           name: staticSvc.name,
           name_kn: staticSvc.nameKn,
@@ -425,8 +443,12 @@ export async function getCustomerBookings(customerId: string): Promise<Booking[]
 
     const enrichedDbList: Booking[] = dbBookings.map(b => {
       const staticSvc = ALL_SERVICES.find(s => s.id === b.category_id || s.id === b.category_slug) || ALL_SERVICES[0]
+      const totalAmount = (b.total_amount === 49 || b.base_amount === 49) ? 11 : (b.total_amount || 11)
+      const baseAmount = (b.base_amount === 49 || b.total_amount === 49) ? 11 : (b.base_amount || 11)
       return {
         ...b,
+        total_amount: totalAmount,
+        base_amount: baseAmount,
         category: b.category || {
           name: staticSvc.name,
           name_kn: staticSvc.nameKn,
