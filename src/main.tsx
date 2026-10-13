@@ -4,6 +4,7 @@ import { BrowserRouter } from 'react-router-dom'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { Toaster } from 'react-hot-toast'
 import App from './App'
+import ErrorBoundary from './components/ui/ErrorBoundary'
 import './styles/globals.css'
 import { useThemeStore } from './store/themeStore'
 
@@ -15,16 +16,18 @@ function Root() {
     document.documentElement.classList.toggle('dark', dark)
   }, [dark])
   return (
-    <QueryClientProvider client={qc}>
-      <BrowserRouter>
-        <App />
-        <Toaster position="top-right" toastOptions={{
+    <ErrorBoundary>
+      <QueryClientProvider client={qc}>
+        <BrowserRouter>
+          <App />
+          <Toaster position="top-right" toastOptions={{
           style: { background:'var(--card)', color:'var(--text)', border:'1px solid var(--border)', borderRadius:'12px', fontSize:'14px', fontFamily:'Inter,sans-serif' },
           success: { iconTheme: { primary:'#f97316', secondary:'#fff' } },
           duration: 3000,
         }} />
-      </BrowserRouter>
-    </QueryClientProvider>
+        </BrowserRouter>
+      </QueryClientProvider>
+    </ErrorBoundary>
   )
 }
 

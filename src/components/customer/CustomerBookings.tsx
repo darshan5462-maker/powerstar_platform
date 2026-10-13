@@ -21,6 +21,7 @@ import HeaderBar from '@/components/layout/HeaderBar'
 import UpiPaymentModal from '@/components/ui/UpiPaymentModal'
 import ReviewModal from '@/components/ui/ReviewModal'
 import { StatusBadge } from '@/components/ui/Badge'
+import { supabase } from '@/lib/supabase'
 import toast from 'react-hot-toast'
 
 export default function CustomerBookings() {

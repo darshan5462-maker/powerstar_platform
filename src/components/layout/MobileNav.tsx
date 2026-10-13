@@ -33,6 +33,9 @@ export function CustomerMobileNav() {
 
   useEffect(() => {
     if (!profile?.id) return
+    const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(profile.id)
+    if (!isUUID) return
+
     const fetchCounts = async () => {
       try {
         const { count } = await supabase
@@ -68,6 +71,9 @@ export function ProviderMobileNav() {
 
   useEffect(() => {
     if (!profile?.id) return
+    const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(profile.id)
+    if (!isUUID) return
+
     const fetchPending = async () => {
       try {
         const { count } = await supabase

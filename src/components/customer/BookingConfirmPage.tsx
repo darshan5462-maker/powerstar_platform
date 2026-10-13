@@ -109,12 +109,6 @@ export default function BookingConfirmPage({
     }
   }
 
-    } catch (err: any) {
-      toast.error(err?.message || 'Payment failed')
-      setLoading(false)
-    }
-  }
-
   async function handleCash() {
     setLoading(true)
     try {
