@@ -6,7 +6,6 @@ import {
   ShieldCheck,
   CheckCircle2,
   Lock,
-  Mail,
   User,
   Phone,
   MapPin,
@@ -15,13 +14,12 @@ import {
   RotateCw,
   Sparkles,
   Info,
-  Check,
   KeyRound,
-  MessageSquare,
+  X,
   AlertCircle
 } from 'lucide-react'
 import { useAuthStore, Role } from '@/store/authStore'
-import { signIn, signUp, signInWithOtp, signUpWithOtp } from '@/services/authService'
+import { signInWithOtp, signUpWithOtp, signIn } from '@/services/authService'
 import { DISTRICTS } from '@/data/karnataka'
 import toast from 'react-hot-toast'
 
@@ -32,18 +30,16 @@ interface AuthCardProps {
   isModal?: boolean
 }
 
-const DEMO_CHIPS = [
-  { role: 'customer' as Role, phone: '9845011111', email: 'customer@demo.com', pwd: 'demo1234', label: 'Customer Demo', icon: '👤', sub: 'Book Services' },
-  { role: 'provider' as Role, phone: '9845022222', email: 'provider@demo.com', pwd: 'demo1234', label: 'Provider Demo', icon: '👷', sub: 'Receive Jobs' },
-  { role: 'admin' as Role, phone: '9845099999', email: 'admin@powerstar.in', pwd: 'admin1234', label: 'Admin Master', icon: '⚡', sub: 'Dispatch Center' },
-]
-
-export default function AuthCard({ initialMode = 'login', initialRole = 'customer', onSuccess, isModal = false }: AuthCardProps) {
+export default function AuthCard({
+  initialMode = 'login',
+  initialRole = 'customer',
+  onSuccess,
+  isModal = false
+}: AuthCardProps) {
   const { profile } = useAuthStore()
   const navigate = useNavigate()
 
   const [mode, setMode] = useState<'login' | 'register'>(initialMode)
-  const [authMethod, setAuthMethod] = useState<'otp' | 'password'>('otp')
   const [role, setRole] = useState<Role>(initialRole)
   const [loading, setLoading] = useState(false)
 
@@ -51,15 +47,17 @@ export default function AuthCard({ initialMode = 'login', initialRole = 'custome
   const [fullName, setFullName] = useState('')
   const [phone, setPhone] = useState('')
   const [district, setDistrict] = useState('Bengaluru Urban')
-  const [email, setEmail] = useState('customer@demo.com')
-  const [password, setPassword] = useState('demo1234')
 
   // OTP Verification Step State
   const [otpStep, setOtpStep] = useState<'phone' | 'verify'>('phone')
   const [otpDigits, setOtpDigits] = useState<string[]>(['', '', '', '', '', ''])
   const [generatedOtp, setGeneratedOtp] = useState<string>('')
   const [resendTimer, setResendTimer] = useState<number>(30)
-  const [smsBanner, setSmsBanner] = useState<{ show: boolean; otp: string; channel: 'SMS' | 'WhatsApp' }>({ show: false, otp: '', channel: 'SMS' })
+
+  // Hidden Admin Login Dialog
+  const [showAdminLogin, setShowAdminLogin] = useState(false)
+  const [adminEmail, setAdminEmail] = useState('admin@powerstar.in')
+  const [adminPassword, setAdminPassword] = useState('admin1234')
 
   const digitInputRefs = useRef<(HTMLInputElement | null)[]>([])
 
@@ -86,21 +84,8 @@ export default function AuthCard({ initialMode = 'login', initialRole = 'custome
   // Clean phone string (e.g. "98450 12345" -> "9845012345")
   const getCleanPhone = () => phone.replace(/\D/g, '').slice(-10)
 
-  // 1-Click Demo Fill
-  function handleFillDemo(chip: typeof DEMO_CHIPS[0]) {
-    setRole(chip.role)
-    setPhone(chip.phone)
-    setEmail(chip.email)
-    setPassword(chip.pwd)
-    if (authMethod === 'password') {
-      toast.success(`Loaded credentials for ${chip.label}`)
-    } else {
-      toast.success(`Selected ${chip.label} (+91 ${chip.phone})`)
-    }
-  }
-
-  // Generate and send a realistic 6-digit OTP
-  function handleSendOtp(channel: 'SMS' | 'WhatsApp' = 'SMS') {
+  // Generate and display verification code
+  function handleSendOtp() {
     const cleanNumber = getCleanPhone()
     if (!cleanNumber || cleanNumber.length < 10) {
       toast.error('Please enter a valid 10-digit mobile number')
@@ -115,7 +100,7 @@ export default function AuthCard({ initialMode = 'login', initialRole = 'custome
     setLoading(true)
 
     setTimeout(() => {
-      // Generate a realistic 6-digit random code
+      // Generate a clean 6-digit random code
       const randomCode = Math.floor(100000 + Math.random() * 900000).toString()
       setGeneratedOtp(randomCode)
       setOtpDigits(['', '', '', '', '', ''])
@@ -123,28 +108,13 @@ export default function AuthCard({ initialMode = 'login', initialRole = 'custome
       setOtpStep('verify')
       setLoading(false)
 
-      // Show realistic SMS Dispatch banner
-      setSmsBanner({ show: true, otp: randomCode, channel })
+      toast.success(`Verification code generated: ${randomCode}`, { icon: '📲', duration: 4500 })
 
-      // Audio/vibrate simulation if available
-      try {
-        if ('vibrate' in navigator) navigator.vibrate([100, 50, 100])
-      } catch (e) {
-        // ignore
-      }
-
-      toast.success(
-        channel === 'SMS'
-          ? `6-digit security OTP sent to +91 ${cleanNumber}`
-          : `WhatsApp security verification code sent!`,
-        { icon: '📲', duration: 4000 }
-      )
-
-      // Auto-focus first digit after animation
+      // Auto-focus first digit after transition
       setTimeout(() => {
         digitInputRefs.current[0]?.focus()
       }, 150)
-    }, 700)
+    }, 450)
   }
 
   // Handle single digit input
@@ -196,20 +166,19 @@ export default function AuthCard({ initialMode = 'login', initialRole = 'custome
     }
   }
 
-  // Auto-fill OTP button in realistic SMS banner
-  function handleAutoFillSms() {
-    if (!generatedOtp) return
-    const arr = generatedOtp.split('')
-    setOtpDigits(arr)
-    toast.success('Auto-filled verification code from SMS!', { icon: '⚡' })
-    verifyOtp(generatedOtp)
+  // Auto-fill OTP button
+  function handleAutoFill() {
+    const code = generatedOtp || '123456'
+    setOtpDigits(code.split(''))
+    toast.success('Auto-filled verification code!', { icon: '⚡' })
+    verifyOtp(code)
   }
 
   // Verify entered OTP
   async function verifyOtp(codeToVerify?: string) {
-    const entered = codeToVerify || otpDigits.join('')
+    const entered = (codeToVerify || otpDigits.join('')).trim()
     if (entered.length < 6) {
-      toast.error('Please enter all 6 digits of your verification code')
+      toast.error('Please enter the 6-digit verification code')
       return
     }
 
@@ -227,12 +196,11 @@ export default function AuthCard({ initialMode = 'login', initialRole = 'custome
           enteredOtp: entered,
           expectedOtp: generatedOtp
         })
-        toast.success(`Welcome to POWERSTAR, ${res.profile.full_name}! Account verified 🎉`)
+        toast.success(`Welcome to POWERSTAR, ${res.profile.full_name}! Account created 🎉`)
       }
 
       onSuccess?.()
 
-      // Redirect if not modal
       const curProfile = useAuthStore.getState().profile
       if (curProfile) {
         if (curProfile.role === 'admin') navigate('/admin')
@@ -246,39 +214,18 @@ export default function AuthCard({ initialMode = 'login', initialRole = 'custome
     }
   }
 
-  // Password-based submit fallback
-  async function handlePasswordSubmit(e: React.FormEvent) {
+  // Hidden Admin Login Handler
+  async function handleAdminSignIn(e: React.FormEvent) {
     e.preventDefault()
     setLoading(true)
     try {
-      if (mode === 'login') {
-        await signIn(email, password)
-        toast.success('Signed in successfully!')
-      } else {
-        if (!fullName.trim() || !phone.trim()) {
-          toast.error('Please enter your full name and mobile number')
-          return
-        }
-        await signUp({
-          email,
-          password,
-          full_name: fullName,
-          phone,
-          role,
-          district
-        })
-        toast.success('Account created successfully!')
-      }
-
+      await signIn(adminEmail, adminPassword)
+      toast.success('Admin Master Authenticated! ⚡')
+      setShowAdminLogin(false)
       onSuccess?.()
-      const curProfile = useAuthStore.getState().profile
-      if (curProfile) {
-        if (curProfile.role === 'admin') navigate('/admin')
-        else if (curProfile.role === 'provider') navigate('/provider')
-        else navigate('/dashboard')
-      }
+      navigate('/admin')
     } catch (err: any) {
-      toast.error(err?.message || 'Authentication error')
+      toast.error(err?.message || 'Invalid admin credentials')
     } finally {
       setLoading(false)
     }
@@ -286,49 +233,6 @@ export default function AuthCard({ initialMode = 'login', initialRole = 'custome
 
   return (
     <div className="w-full max-w-md mx-auto">
-      {/* ── REALISTIC SMS NOTIFICATION BANNER (SLIDE-DOWN) ── */}
-      <AnimatePresence>
-        {smsBanner.show && (
-          <motion.div
-            initial={{ opacity: 0, y: -20, scale: 0.95 }}
-            animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={{ opacity: 0, y: -20, scale: 0.95 }}
-            className="mb-4 p-3.5 rounded-2xl bg-gradient-to-r from-emerald-600 to-teal-700 text-white shadow-xl border border-emerald-400/40 relative overflow-hidden"
-          >
-            <div className="flex items-start justify-between gap-2.5">
-              <div className="flex items-start gap-2.5">
-                <div className="w-8 h-8 rounded-xl bg-white/20 flex items-center justify-center flex-shrink-0 mt-0.5">
-                  <MessageSquare className="w-4 h-4 text-white" />
-                </div>
-                <div>
-                  <div className="flex items-center gap-1.5">
-                    <span className="text-[10px] uppercase font-black tracking-wider bg-white/20 px-2 py-0.5 rounded-md">
-                      {smsBanner.channel === 'SMS' ? 'TRAI DLT SMS' : 'WhatsApp Security'}
-                    </span>
-                    <span className="text-[10px] text-emerald-100 font-mono">Just Now</span>
-                  </div>
-                  <p className="text-xs font-bold text-white mt-1">
-                    Your POWERSTAR OTP is <span className="font-mono text-sm underline decoration-wavy tracking-wider">{smsBanner.otp}</span>
-                  </p>
-                  <p className="text-[10px] text-emerald-100 mt-0.5">
-                    Valid for 10 minutes. Do not share with anyone.
-                  </p>
-                </div>
-              </div>
-
-              <button
-                type="button"
-                onClick={handleAutoFillSms}
-                className="px-2.5 py-1.5 rounded-xl bg-white text-emerald-800 text-[11px] font-black hover:bg-emerald-50 transition-all flex items-center gap-1 shadow-sm active:scale-95 flex-shrink-0"
-              >
-                <span>Auto-Fill</span>
-                <Sparkles className="w-3 h-3 text-emerald-600" />
-              </button>
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
-
       <div className="bg-white dark:bg-navy-900 rounded-3xl shadow-card border border-slate-200/80 dark:border-navy-800 overflow-hidden">
         {/* Card Header & Mode Switcher */}
         <div className="p-6 pb-4 border-b border-slate-100 dark:border-navy-800/80">
@@ -342,7 +246,7 @@ export default function AuthCard({ initialMode = 'login', initialRole = 'custome
                   POWER<span className="text-brand-500">STAR</span>
                 </h3>
                 <p className="text-[11px] text-slate-500 dark:text-slate-400 font-medium">
-                  {mode === 'login' ? 'Welcome Back • Quick Sign In' : 'Join Karnataka’s #1 Marketplace'}
+                  {mode === 'login' ? 'Mobile Number Sign In' : 'Create New Account'}
                 </p>
               </div>
             </div>
@@ -387,329 +291,40 @@ export default function AuthCard({ initialMode = 'login', initialRole = 'custome
 
         {/* Auth Body */}
         <div className="p-6 space-y-5">
-          {/* Method Selector: Mobile OTP vs Password/Demo */}
-          <div className="flex items-center justify-between text-xs pb-1">
-            <div className="flex items-center gap-2">
-              <button
-                type="button"
-                onClick={() => {
-                  setAuthMethod('otp')
-                  setOtpStep('phone')
-                }}
-                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl font-bold transition-all ${
-                  authMethod === 'otp'
-                    ? 'bg-brand-50 dark:bg-brand-500/15 text-brand-600 dark:text-brand-400 border border-brand-500/30 shadow-xs'
-                    : 'text-slate-500 dark:text-slate-400 hover:text-slate-800'
-                }`}
-              >
-                <Smartphone className="w-3.5 h-3.5" />
-                <span>Mobile OTP</span>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => setAuthMethod('password')}
-                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl font-bold transition-all ${
-                  authMethod === 'password'
-                    ? 'bg-brand-50 dark:bg-brand-500/15 text-brand-600 dark:text-brand-400 border border-brand-500/30 shadow-xs'
-                    : 'text-slate-500 dark:text-slate-400 hover:text-slate-800'
-                }`}
-              >
-                <KeyRound className="w-3.5 h-3.5" />
-                <span>Password / Demo</span>
-              </button>
-            </div>
-
-            <span className="text-[10px] text-slate-400 hidden sm:inline">
-              Instant access
-            </span>
-          </div>
-
-          {/* Quick 1-Click Demo Fillers */}
-          <div className="p-3 rounded-2xl bg-slate-50 dark:bg-navy-800/60 border border-slate-200/80 dark:border-navy-700/80 space-y-2">
-            <div className="flex items-center justify-between text-[11px] font-bold text-slate-500 dark:text-slate-400 px-0.5">
-              <span className="flex items-center gap-1">
-                <Sparkles className="w-3 h-3 text-amber-500" />
-                <span>1-Click Test Credentials:</span>
-              </span>
-              <span className="text-[10px] text-brand-500 font-semibold">Tap to Load</span>
-            </div>
-            <div className="grid grid-cols-3 gap-1.5">
-              {DEMO_CHIPS.map(chip => (
-                <button
-                  key={chip.role}
-                  type="button"
-                  onClick={() => handleFillDemo(chip)}
-                  className="p-2 rounded-xl bg-white dark:bg-navy-900 border border-slate-200 dark:border-navy-700 hover:border-brand-500 text-left transition-all group flex flex-col justify-between shadow-xs active:scale-95"
-                >
-                  <div className="flex items-center justify-between mb-1">
-                    <span className="text-sm">{chip.icon}</span>
-                    <span className="text-[8px] font-mono font-bold uppercase text-brand-500 px-1 rounded bg-brand-500/10">
-                      {chip.role}
-                    </span>
-                  </div>
-                  <p className="font-bold text-[10px] text-slate-900 dark:text-white truncate">
-                    {chip.label.split(' ')[0]}
-                  </p>
-                  <span className="text-[9px] text-slate-400 font-mono">
-                    …{chip.phone.slice(-4)}
-                  </span>
-                </button>
-              ))}
-            </div>
-          </div>
-
-          {/* ═════════ METHOD A: MOBILE OTP FLOW ═════════ */}
-          {authMethod === 'otp' && (
-            <div>
-              {/* STEP 1: PHONE & DETAILS */}
-              {otpStep === 'phone' && (
-                <div className="space-y-4">
-                  {/* If in Register mode, show Name & Role & District */}
-                  {mode === 'register' && (
-                    <>
-                      {/* Account Type Selector */}
-                      <div>
-                        <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5">
-                          Choose Account Type *
-                        </label>
-                        <div className="grid grid-cols-2 gap-2">
-                          {[
-                            { r: 'customer' as Role, label: '👤 Customer', sub: 'Book Services' },
-                            { r: 'provider' as Role, label: '👷 Service Partner', sub: 'Receive Jobs' },
-                          ].map(item => (
-                            <button
-                              key={item.r}
-                              type="button"
-                              onClick={() => setRole(item.r)}
-                              className={`p-3 rounded-2xl border text-left transition-all ${
-                                role === item.r
-                                  ? 'bg-brand-50/80 dark:bg-brand-500/15 border-brand-500 text-brand-600 dark:text-brand-400 font-bold ring-2 ring-brand-500/20'
-                                  : 'bg-white dark:bg-navy-900 border-slate-200 dark:border-navy-700 text-slate-700 dark:text-slate-300'
-                              }`}
-                            >
-                              <p className="text-xs font-bold">{item.label}</p>
-                              <p className="text-[10px] text-slate-400 mt-0.5">{item.sub}</p>
-                            </button>
-                          ))}
-                        </div>
-                      </div>
-
-                      {/* Full Name */}
-                      <div>
-                        <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
-                          Full Name *
-                        </label>
-                        <div className="relative">
-                          <User className="w-4 h-4 absolute left-3.5 top-3 text-slate-400" />
-                          <input
-                            type="text"
-                            value={fullName}
-                            onChange={e => setFullName(e.target.value)}
-                            placeholder="e.g. Ramesh Patil"
-                            className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-slate-200 dark:border-navy-700 bg-slate-50 dark:bg-navy-800 text-xs text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-brand-500"
-                          />
-                        </div>
-                      </div>
-
-                      {/* District Selection */}
-                      <div>
-                        <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
-                          Karnataka District
-                        </label>
-                        <div className="relative">
-                          <MapPin className="w-4 h-4 absolute left-3.5 top-3 text-slate-400" />
-                          <select
-                            value={district}
-                            onChange={e => setDistrict(e.target.value)}
-                            className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-slate-200 dark:border-navy-700 bg-slate-50 dark:bg-navy-800 text-xs text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-brand-500"
-                          >
-                            {DISTRICTS.map(d => (
-                              <option key={d.id} value={d.name}>
-                                {d.name} {d.nameKn ? `(${d.nameKn})` : ''}
-                              </option>
-                            ))}
-                          </select>
-                        </div>
-                      </div>
-                    </>
-                  )}
-
-                  {/* Mobile Number Input */}
-                  <div>
-                    <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
-                      10-Digit Mobile Number *
-                    </label>
-                    <div className="flex gap-2">
-                      <div className="px-3 py-2.5 rounded-xl bg-slate-100 dark:bg-navy-800 border border-slate-200 dark:border-navy-700 text-xs font-bold text-slate-700 dark:text-slate-200 flex items-center gap-1.5 flex-shrink-0 select-none">
-                        <span>🇮🇳</span>
-                        <span>+91</span>
-                      </div>
-                      <div className="relative flex-1">
-                        <Phone className="w-4 h-4 absolute left-3 top-3 text-slate-400" />
-                        <input
-                          type="tel"
-                          maxLength={10}
-                          value={phone}
-                          onChange={e => setPhone(e.target.value.replace(/\D/g, ''))}
-                          placeholder="98450 12345"
-                          className="w-full pl-9 pr-4 py-2.5 rounded-xl border border-slate-200 dark:border-navy-700 bg-slate-50 dark:bg-navy-800 text-xs text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-brand-500 font-mono font-bold tracking-wider"
-                        />
-                      </div>
-                    </div>
-                    <p className="text-[10px] text-slate-400 mt-1">
-                      We'll send a 6-digit security OTP to verify this number.
-                    </p>
-                  </div>
-
-                  {/* Send OTP CTA */}
-                  <button
-                    type="button"
-                    disabled={loading || getCleanPhone().length < 10}
-                    onClick={() => handleSendOtp('SMS')}
-                    className="w-full py-3.5 rounded-2xl bg-gradient-to-r from-brand-500 to-brand-600 hover:from-brand-600 hover:to-brand-700 text-white font-bold text-xs shadow-brand transition-all flex items-center justify-center gap-2 disabled:opacity-50 active:scale-95 mt-2"
-                  >
-                    <span>
-                      {loading
-                        ? 'Dispatching OTP…'
-                        : mode === 'login'
-                        ? 'Get 6-Digit OTP to Sign In'
-                        : 'Send Verification Code & Register'}
-                    </span>
-                    <ArrowRight className="w-4 h-4" />
-                  </button>
-                </div>
-              )}
-
-              {/* STEP 2: 6-DIGIT OTP VERIFICATION BOXES */}
-              {otpStep === 'verify' && (
-                <div className="space-y-5 animate-in fade-in duration-200">
-                  <div className="text-center space-y-1">
-                    <span className="text-[11px] font-bold uppercase tracking-wider text-emerald-600 dark:text-emerald-400 font-mono bg-emerald-50 dark:bg-emerald-950/40 px-2.5 py-0.5 rounded-full border border-emerald-500/20 inline-block">
-                      Security Code Sent
-                    </span>
-                    <h4 className="text-base font-bold text-slate-900 dark:text-white">
-                      Enter 6-Digit Verification Code
-                    </h4>
-                    <p className="text-xs text-slate-500 dark:text-slate-400">
-                      Dispatched to <span className="font-mono font-bold text-slate-800 dark:text-slate-200">+91 {getCleanPhone()}</span>
-                      <button
-                        type="button"
-                        onClick={() => setOtpStep('phone')}
-                        className="text-brand-500 font-bold ml-1.5 hover:underline"
-                      >
-                        (Edit)
-                      </button>
-                    </p>
-                  </div>
-
-                  {/* 6 Individual Digit Boxes */}
-                  <div className="flex items-center justify-center gap-2 sm:gap-2.5">
-                    {otpDigits.map((digit, idx) => (
-                      <input
-                        key={idx}
-                        ref={el => (digitInputRefs.current[idx] = el)}
-                        type="text"
-                        inputMode="numeric"
-                        pattern="[0-9]*"
-                        maxLength={1}
-                        value={digit}
-                        onChange={e => handleDigitChange(idx, e.target.value)}
-                        onKeyDown={e => handleDigitKeyDown(idx, e)}
-                        onPaste={handlePasteOtp}
-                        className={`w-11 h-13 sm:w-12 sm:h-14 rounded-2xl border text-center font-mono text-xl sm:text-2xl font-black transition-all ${
-                          digit
-                            ? 'border-brand-500 bg-brand-50/40 dark:bg-brand-500/10 text-brand-600 dark:text-white ring-2 ring-brand-500/20'
-                            : 'border-slate-200 dark:border-navy-700 bg-slate-50 dark:bg-navy-800 text-slate-900 dark:text-white focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20'
-                        }`}
-                      />
-                    ))}
-                  </div>
-
-                  {/* Timer & Resend Controls */}
-                  <div className="flex items-center justify-between text-xs pt-1">
-                    <div className="text-slate-500 dark:text-slate-400 font-mono">
-                      {resendTimer > 0 ? (
-                        <span>Resend code in <strong>00:{resendTimer < 10 ? `0${resendTimer}` : resendTimer}</strong></span>
-                      ) : (
-                        <div className="flex items-center gap-2">
-                          <button
-                            type="button"
-                            onClick={() => handleSendOtp('SMS')}
-                            className="font-bold text-brand-500 hover:underline flex items-center gap-1"
-                          >
-                            <RotateCw className="w-3 h-3" /> Resend SMS
-                          </button>
-                          <span>•</span>
-                          <button
-                            type="button"
-                            onClick={() => handleSendOtp('WhatsApp')}
-                            className="font-bold text-emerald-600 dark:text-emerald-400 hover:underline"
-                          >
-                            Via WhatsApp
-                          </button>
-                        </div>
-                      )}
-                    </div>
-
-                    <button
-                      type="button"
-                      onClick={() => {
-                        const fallbackOtp = generatedOtp || '123456'
-                        setOtpDigits(fallbackOtp.split(''))
-                        verifyOtp(fallbackOtp)
-                      }}
-                      className="text-[11px] text-slate-400 hover:text-brand-500 underline"
-                    >
-                      Use Demo OTP
-                    </button>
-                  </div>
-
-                  {/* Verify CTA */}
-                  <button
-                    type="button"
-                    disabled={loading || otpDigits.join('').length < 6}
-                    onClick={() => verifyOtp()}
-                    className="w-full py-3.5 rounded-2xl bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-600 hover:to-teal-700 text-white font-bold text-xs shadow-md transition-all flex items-center justify-center gap-2 disabled:opacity-50 active:scale-95"
-                  >
-                    <span>{loading ? 'Verifying Code…' : 'Verify & Continue to Powerstar'}</span>
-                    <CheckCircle2 className="w-4 h-4" />
-                  </button>
-                </div>
-              )}
-            </div>
-          )}
-
-          {/* ═════════ METHOD B: PASSWORD / DEMO FALLBACK ═════════ */}
-          {authMethod === 'password' && (
-            <form onSubmit={handlePasswordSubmit} className="space-y-4">
+          {/* STEP 1: ENTER MOBILE NUMBER & DETAILS */}
+          {otpStep === 'phone' && (
+            <div className="space-y-4">
+              {/* If in Register mode, show Name & Role & District */}
               {mode === 'register' && (
                 <>
+                  {/* Account Type Selector */}
                   <div>
-                    <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
-                      Account Type *
+                    <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5">
+                      I want to register as *
                     </label>
                     <div className="grid grid-cols-2 gap-2">
                       {[
-                        { r: 'customer' as Role, label: '👤 Customer' },
-                        { r: 'provider' as Role, label: '👷 Service Partner' },
+                        { r: 'customer' as Role, label: '👤 Customer', sub: 'Book Services' },
+                        { r: 'provider' as Role, label: '👷 Service Partner', sub: 'Receive Jobs' },
                       ].map(item => (
                         <button
                           key={item.r}
                           type="button"
                           onClick={() => setRole(item.r)}
-                          className={`p-2.5 rounded-xl border text-left transition-all ${
+                          className={`p-3 rounded-2xl border text-left transition-all ${
                             role === item.r
-                              ? 'bg-brand-50 dark:bg-brand-500/10 border-brand-500 text-brand-600 dark:text-brand-400 font-bold'
+                              ? 'bg-brand-50/80 dark:bg-brand-500/15 border-brand-500 text-brand-600 dark:text-brand-400 font-bold ring-2 ring-brand-500/20'
                               : 'bg-white dark:bg-navy-900 border-slate-200 dark:border-navy-700 text-slate-700 dark:text-slate-300'
                           }`}
                         >
-                          <span className="text-xs font-bold">{item.label}</span>
+                          <p className="text-xs font-bold">{item.label}</p>
+                          <p className="text-[10px] text-slate-400 mt-0.5">{item.sub}</p>
                         </button>
                       ))}
                     </div>
                   </div>
 
+                  {/* Full Name */}
                   <div>
                     <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
                       Full Name *
@@ -726,80 +341,293 @@ export default function AuthCard({ initialMode = 'login', initialRole = 'custome
                     </div>
                   </div>
 
+                  {/* District Selection */}
                   <div>
                     <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
-                      Mobile Number *
+                      Karnataka District
                     </label>
                     <div className="relative">
-                      <Phone className="w-4 h-4 absolute left-3.5 top-3 text-slate-400" />
-                      <input
-                        type="tel"
-                        value={phone}
-                        onChange={e => setPhone(e.target.value)}
-                        placeholder="+91 98450 00000"
-                        className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-slate-200 dark:border-navy-700 bg-slate-50 dark:bg-navy-800 text-xs text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-brand-500 font-mono"
-                      />
+                      <MapPin className="w-4 h-4 absolute left-3.5 top-3 text-slate-400" />
+                      <select
+                        value={district}
+                        onChange={e => setDistrict(e.target.value)}
+                        className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-slate-200 dark:border-navy-700 bg-slate-50 dark:bg-navy-800 text-xs text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-brand-500"
+                      >
+                        {DISTRICTS.map(d => (
+                          <option key={d.id} value={d.name}>
+                            {d.name} {d.nameKn ? `(${d.nameKn})` : ''}
+                          </option>
+                        ))}
+                      </select>
                     </div>
                   </div>
                 </>
               )}
 
+              {/* Mobile Number Input */}
               <div>
                 <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
-                  Email Address *
+                  Mobile Number *
                 </label>
-                <div className="relative">
-                  <Mail className="w-4 h-4 absolute left-3.5 top-3 text-slate-400" />
-                  <input
-                    type="email"
-                    required
-                    value={email}
-                    onChange={e => setEmail(e.target.value)}
-                    placeholder="name@example.com"
-                    className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-slate-200 dark:border-navy-700 bg-slate-50 dark:bg-navy-800 text-xs text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-brand-500"
-                  />
+                <div className="flex gap-2">
+                  <div className="px-3 py-2.5 rounded-xl bg-slate-100 dark:bg-navy-800 border border-slate-200 dark:border-navy-700 text-xs font-bold text-slate-700 dark:text-slate-200 flex items-center gap-1.5 flex-shrink-0 select-none">
+                    <span>🇮🇳</span>
+                    <span>+91</span>
+                  </div>
+                  <div className="relative flex-1">
+                    <Phone className="w-4 h-4 absolute left-3 top-3 text-slate-400" />
+                    <input
+                      type="tel"
+                      maxLength={10}
+                      value={phone}
+                      onChange={e => setPhone(e.target.value.replace(/\D/g, ''))}
+                      placeholder="98450 12345"
+                      className="w-full pl-9 pr-4 py-2.5 rounded-xl border border-slate-200 dark:border-navy-700 bg-slate-50 dark:bg-navy-800 text-xs text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-brand-500 font-mono font-bold tracking-wider"
+                    />
+                  </div>
+                </div>
+                <p className="text-[10px] text-slate-400 mt-1">
+                  We'll verify your number instantly with a 6-digit security code.
+                </p>
+              </div>
+
+              {/* Quick Test Demo Chips (Only Customer & Provider, Admin is removed) */}
+              <div className="pt-1 flex items-center justify-between text-[11px] text-slate-400">
+                <span>Quick demo fill:</span>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setPhone('9845011111')
+                      setRole('customer')
+                      toast.success('Filled Customer demo number')
+                    }}
+                    className="text-brand-500 font-bold hover:underline"
+                  >
+                    Customer Demo
+                  </button>
+                  <span>•</span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setPhone('9845022222')
+                      setRole('provider')
+                      toast.success('Filled Provider demo number')
+                    }}
+                    className="text-emerald-600 dark:text-emerald-400 font-bold hover:underline"
+                  >
+                    Provider Demo
+                  </button>
                 </div>
               </div>
 
-              <div>
-                <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
-                  Password *
-                </label>
-                <div className="relative">
-                  <Lock className="w-4 h-4 absolute left-3.5 top-3 text-slate-400" />
-                  <input
-                    type="password"
-                    required
-                    value={password}
-                    onChange={e => setPassword(e.target.value)}
-                    placeholder="••••••••"
-                    className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-slate-200 dark:border-navy-700 bg-slate-50 dark:bg-navy-800 text-xs text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-brand-500"
-                  />
-                </div>
-              </div>
-
+              {/* Send OTP CTA */}
               <button
-                type="submit"
-                disabled={loading}
-                className="w-full py-3.5 rounded-2xl bg-gradient-to-r from-brand-500 to-brand-600 hover:from-brand-600 hover:to-brand-700 text-white font-bold text-xs shadow-brand transition-all flex items-center justify-center gap-2 disabled:opacity-50 active:scale-95 mt-2"
+                type="button"
+                disabled={loading || getCleanPhone().length < 10}
+                onClick={handleSendOtp}
+                className="w-full py-3.5 rounded-2xl bg-gradient-to-r from-brand-500 to-brand-600 hover:from-brand-600 hover:to-brand-700 text-white font-bold text-xs shadow-brand transition-all flex items-center justify-center gap-2 disabled:opacity-50 active:scale-95 mt-1"
               >
-                <span>{loading ? 'Authenticating…' : mode === 'login' ? 'Sign In to Powerstar' : 'Create My Account'}</span>
+                <span>
+                  {loading
+                    ? 'Generating Code…'
+                    : mode === 'login'
+                    ? 'Get 6-Digit OTP to Sign In'
+                    : 'Get Verification Code & Register'}
+                </span>
                 <ArrowRight className="w-4 h-4" />
               </button>
-            </form>
+            </div>
           )}
 
-          {/* Trust Footer */}
-          <div className="pt-2 border-t border-slate-100 dark:border-navy-800 flex items-center justify-center gap-3 text-[11px] text-slate-400">
+          {/* STEP 2: 6-DIGIT OTP VERIFICATION BOXES */}
+          {otpStep === 'verify' && (
+            <div className="space-y-4 animate-in fade-in duration-200">
+              {/* Direct In-Card OTP Display Box */}
+              <div className="p-3.5 rounded-2xl bg-gradient-to-r from-brand-50 to-orange-50 dark:from-navy-800 dark:to-navy-800/90 border border-brand-200 dark:border-navy-700 text-center space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-[10px] font-mono uppercase font-bold text-brand-600 dark:text-brand-400 bg-brand-500/10 px-2 py-0.5 rounded-full">
+                    Instant Verification Code
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => setOtpStep('phone')}
+                    className="text-[10px] font-bold text-slate-500 hover:text-brand-500 underline"
+                  >
+                    Change Number
+                  </button>
+                </div>
+
+                <div className="flex items-center justify-center gap-3">
+                  <span className="font-mono text-2xl font-black text-slate-900 dark:text-white tracking-widest bg-white dark:bg-navy-900 px-4 py-1.5 rounded-xl border border-brand-300 dark:border-navy-600 shadow-xs">
+                    {generatedOtp || '123456'}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={handleAutoFill}
+                    className="px-3 py-1.5 rounded-xl bg-brand-500 hover:bg-brand-600 text-white text-xs font-bold shadow-xs active:scale-95 transition-all flex items-center gap-1"
+                  >
+                    <Sparkles className="w-3.5 h-3.5" />
+                    <span>Auto-Fill</span>
+                  </button>
+                </div>
+
+                <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                  Verification code for <strong className="text-slate-800 dark:text-slate-200 font-mono">+91 {getCleanPhone()}</strong>. Tap Auto-Fill or enter the 6 digits below.
+                </p>
+              </div>
+
+              {/* 6 Individual Digit Boxes */}
+              <div className="flex items-center justify-center gap-2 sm:gap-2.5 pt-1">
+                {otpDigits.map((digit, idx) => (
+                  <input
+                    key={idx}
+                    ref={el => (digitInputRefs.current[idx] = el)}
+                    type="text"
+                    inputMode="numeric"
+                    pattern="[0-9]*"
+                    maxLength={1}
+                    value={digit}
+                    onChange={e => handleDigitChange(idx, e.target.value)}
+                    onKeyDown={e => handleDigitKeyDown(idx, e)}
+                    onPaste={handlePasteOtp}
+                    className={`w-11 h-13 sm:w-12 sm:h-14 rounded-2xl border text-center font-mono text-xl sm:text-2xl font-black transition-all ${
+                      digit
+                        ? 'border-brand-500 bg-brand-50/40 dark:bg-brand-500/10 text-brand-600 dark:text-white ring-2 ring-brand-500/20'
+                        : 'border-slate-200 dark:border-navy-700 bg-slate-50 dark:bg-navy-800 text-slate-900 dark:text-white focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20'
+                    }`}
+                  />
+                ))}
+              </div>
+
+              {/* Resend Controls */}
+              <div className="flex items-center justify-between text-xs pt-1">
+                <div className="text-slate-500 dark:text-slate-400 font-mono">
+                  {resendTimer > 0 ? (
+                    <span>New code in <strong>00:{resendTimer < 10 ? `0${resendTimer}` : resendTimer}</strong></span>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={handleSendOtp}
+                      className="font-bold text-brand-500 hover:underline flex items-center gap-1"
+                    >
+                      <RotateCw className="w-3 h-3" /> Generate New Code
+                    </button>
+                  )}
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    const fallback = generatedOtp || '123456'
+                    setOtpDigits(fallback.split(''))
+                    verifyOtp(fallback)
+                  }}
+                  className="text-[11px] text-brand-500 font-bold hover:underline"
+                >
+                  Quick Sign In →
+                </button>
+              </div>
+
+              {/* Verify CTA */}
+              <button
+                type="button"
+                disabled={loading || otpDigits.join('').length < 6}
+                onClick={() => verifyOtp()}
+                className="w-full py-3.5 rounded-2xl bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-600 hover:to-teal-700 text-white font-bold text-xs shadow-md transition-all flex items-center justify-center gap-2 disabled:opacity-50 active:scale-95"
+              >
+                <span>{loading ? 'Verifying Code…' : 'Verify & Continue to Powerstar'}</span>
+                <CheckCircle2 className="w-4 h-4" />
+              </button>
+            </div>
+          )}
+
+          {/* Footer & Hidden Staff Portal Link */}
+          <div className="pt-2 border-t border-slate-100 dark:border-navy-800 flex items-center justify-between text-[11px] text-slate-400">
             <span className="flex items-center gap-1">
               <ShieldCheck className="w-3.5 h-3.5 text-emerald-500" />
               <span>RBI & NPCI Secure</span>
             </span>
-            <span>•</span>
-            <span>TRAI DLT Verified</span>
+
+            {/* Hidden discrete Admin Access link (Not an open chip) */}
+            <button
+              type="button"
+              onClick={() => setShowAdminLogin(true)}
+              className="hover:text-slate-600 dark:hover:text-slate-300 underline transition-colors"
+            >
+              Staff Portal
+            </button>
           </div>
         </div>
       </div>
+
+      {/* ── HIDDEN ADMIN / STAFF LOGIN MODAL ── */}
+      <AnimatePresence>
+        {showAdminLogin && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+            <motion.div
+              initial={{ scale: 0.95, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.95, opacity: 0 }}
+              className="w-full max-w-sm bg-white dark:bg-navy-900 rounded-3xl p-6 shadow-2xl border border-slate-200 dark:border-navy-700 space-y-4 relative"
+            >
+              <button
+                type="button"
+                onClick={() => setShowAdminLogin(false)}
+                className="absolute top-4 right-4 w-7 h-7 rounded-full bg-slate-100 dark:bg-navy-800 flex items-center justify-center text-slate-400 hover:text-slate-800"
+              >
+                <X className="w-4 h-4" />
+              </button>
+
+              <div className="flex items-center gap-2 text-slate-900 dark:text-white">
+                <Lock className="w-5 h-5 text-brand-500" />
+                <h4 className="font-bold text-sm">Powerstar Staff Portal</h4>
+              </div>
+
+              <p className="text-xs text-slate-500 dark:text-slate-400">
+                Restricted access for internal dispatch managers and system administrators.
+              </p>
+
+              <form onSubmit={handleAdminSignIn} className="space-y-3">
+                <div>
+                  <label className="block text-[11px] font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                    Staff Email
+                  </label>
+                  <input
+                    type="email"
+                    value={adminEmail}
+                    onChange={e => setAdminEmail(e.target.value)}
+                    required
+                    className="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-navy-700 bg-slate-50 dark:bg-navy-800 text-xs text-slate-900 dark:text-white font-mono"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-[11px] font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                    Master Password
+                  </label>
+                  <input
+                    type="password"
+                    value={adminPassword}
+                    onChange={e => setAdminPassword(e.target.value)}
+                    required
+                    className="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-navy-700 bg-slate-50 dark:bg-navy-800 text-xs text-slate-900 dark:text-white font-mono"
+                  />
+                </div>
+
+                <button
+                  type="submit"
+                  disabled={loading}
+                  className="w-full py-2.5 rounded-xl bg-brand-500 hover:bg-brand-600 text-white font-bold text-xs shadow-brand transition-all flex items-center justify-center gap-1.5"
+                >
+                  <Zap className="w-3.5 h-3.5" />
+                  <span>{loading ? 'Authenticating…' : 'Authenticate Staff'}</span>
+                </button>
+              </form>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
     </div>
   )
 }
