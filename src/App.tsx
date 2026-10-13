@@ -4,6 +4,7 @@ import { useAuthStore } from './store/authStore'
 
 import LandingPage       from './pages/LandingPage'
 import AuthPage          from './pages/AuthPage'
+import AdminLoginPage    from './pages/AdminLoginPage'
 import CustomerDashboard from './pages/CustomerDashboard'
 import ProviderDashboard from './pages/ProviderDashboard'
 import AdminDashboard    from './pages/AdminDashboard'
@@ -28,6 +29,15 @@ function Guard({ role, children }: { role:string; children:React.ReactNode }) {
   return <>{children}</>
 }
 
+function AdminGuard({ children }: { children: React.ReactNode }) {
+  const { profile, isLoading } = useAuthStore()
+  if (isLoading) return <Spinner />
+  if (!profile || profile.role !== 'admin') {
+    return <AdminLoginPage />
+  }
+  return <>{children}</>
+}
+
 function Root() {
   const { profile, isLoading } = useAuth()
   if (isLoading) return <Spinner />
@@ -45,9 +55,10 @@ export default function App() {
     <Routes>
       <Route path="/"    element={<Root />} />
       <Route path="/auth" element={<AuthPage />} />
+      <Route path="/admin/login" element={<AdminLoginPage />} />
       <Route path="/dashboard/*" element={<Guard role="customer"><CustomerDashboard /></Guard>} />
       <Route path="/provider/*"  element={<Guard role="provider"><ProviderDashboard /></Guard>} />
-      <Route path="/admin/*"     element={<Guard role="admin"><AdminDashboard /></Guard>} />
+      <Route path="/admin/*"     element={<AdminGuard><AdminDashboard /></AdminGuard>} />
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
   )

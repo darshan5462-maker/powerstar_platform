@@ -13,13 +13,10 @@ import {
   Smartphone,
   RotateCw,
   Sparkles,
-  Info,
-  KeyRound,
-  X,
-  AlertCircle
+  Info
 } from 'lucide-react'
 import { useAuthStore, Role } from '@/store/authStore'
-import { signInWithOtp, signUpWithOtp, signIn } from '@/services/authService'
+import { signInWithOtp, signUpWithOtp } from '@/services/authService'
 import { DISTRICTS } from '@/data/karnataka'
 import toast from 'react-hot-toast'
 
@@ -54,11 +51,6 @@ export default function AuthCard({
   const [generatedOtp, setGeneratedOtp] = useState<string>('')
   const [resendTimer, setResendTimer] = useState<number>(30)
 
-  // Hidden Admin Login Dialog
-  const [showAdminLogin, setShowAdminLogin] = useState(false)
-  const [adminEmail, setAdminEmail] = useState('admin@powerstar.in')
-  const [adminPassword, setAdminPassword] = useState('admin1234')
-
   const digitInputRefs = useRef<(HTMLInputElement | null)[]>([])
 
   // If already logged in, navigate
@@ -84,7 +76,7 @@ export default function AuthCard({
   // Clean phone string (e.g. "98450 12345" -> "9845012345")
   const getCleanPhone = () => phone.replace(/\D/g, '').slice(-10)
 
-  // Generate and display verification code
+  // Generate and send 6-digit OTP
   function handleSendOtp() {
     const cleanNumber = getCleanPhone()
     if (!cleanNumber || cleanNumber.length < 10) {
@@ -93,14 +85,14 @@ export default function AuthCard({
     }
 
     if (mode === 'register' && !fullName.trim()) {
-      toast.error('Please enter your full name to create an account')
+      toast.error('Please enter your full name')
       return
     }
 
     setLoading(true)
 
     setTimeout(() => {
-      // Generate a clean 6-digit random code
+      // Generate clean 6-digit verification code
       const randomCode = Math.floor(100000 + Math.random() * 900000).toString()
       setGeneratedOtp(randomCode)
       setOtpDigits(['', '', '', '', '', ''])
@@ -108,13 +100,13 @@ export default function AuthCard({
       setOtpStep('verify')
       setLoading(false)
 
-      toast.success(`Verification code generated: ${randomCode}`, { icon: '📲', duration: 4500 })
+      toast.success(`Verification code: ${randomCode}`, { icon: '📲', duration: 4000 })
 
-      // Auto-focus first digit after transition
+      // Auto-focus first digit input box
       setTimeout(() => {
         digitInputRefs.current[0]?.focus()
       }, 150)
-    }, 450)
+    }, 400)
   }
 
   // Handle single digit input
@@ -178,7 +170,7 @@ export default function AuthCard({
   async function verifyOtp(codeToVerify?: string) {
     const entered = (codeToVerify || otpDigits.join('')).trim()
     if (entered.length < 6) {
-      toast.error('Please enter the 6-digit verification code')
+      toast.error('Please enter all 6 digits')
       return
     }
 
@@ -209,23 +201,6 @@ export default function AuthCard({
       }
     } catch (err: any) {
       toast.error(err?.message || 'Verification failed. Please try again.')
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  // Hidden Admin Login Handler
-  async function handleAdminSignIn(e: React.FormEvent) {
-    e.preventDefault()
-    setLoading(true)
-    try {
-      await signIn(adminEmail, adminPassword)
-      toast.success('Admin Master Authenticated! ⚡')
-      setShowAdminLogin(false)
-      onSuccess?.()
-      navigate('/admin')
-    } catch (err: any) {
-      toast.error(err?.message || 'Invalid admin credentials')
     } finally {
       setLoading(false)
     }
@@ -294,36 +269,36 @@ export default function AuthCard({
           {/* STEP 1: ENTER MOBILE NUMBER & DETAILS */}
           {otpStep === 'phone' && (
             <div className="space-y-4">
-              {/* If in Register mode, show Name & Role & District */}
+              {/* Account Type Selector for Customer vs Service Partner */}
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5">
+                  {mode === 'login' ? 'Signing In as' : 'Register New Account as *'}
+                </label>
+                <div className="grid grid-cols-2 gap-2">
+                  {[
+                    { r: 'customer' as Role, label: '👤 Customer', sub: 'Book Services' },
+                    { r: 'provider' as Role, label: '👷 Service Partner', sub: 'Receive & Earn' },
+                  ].map(item => (
+                    <button
+                      key={item.r}
+                      type="button"
+                      onClick={() => setRole(item.r)}
+                      className={`p-3 rounded-2xl border text-left transition-all ${
+                        role === item.r
+                          ? 'bg-brand-50/80 dark:bg-brand-500/15 border-brand-500 text-brand-600 dark:text-brand-400 font-bold ring-2 ring-brand-500/20'
+                          : 'bg-white dark:bg-navy-900 border-slate-200 dark:border-navy-700 text-slate-700 dark:text-slate-300 hover:border-slate-300'
+                      }`}
+                    >
+                      <p className="text-xs font-bold">{item.label}</p>
+                      <p className="text-[10px] text-slate-400 mt-0.5">{item.sub}</p>
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* If in Register mode, show Name & District */}
               {mode === 'register' && (
                 <>
-                  {/* Account Type Selector */}
-                  <div>
-                    <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5">
-                      I want to register as *
-                    </label>
-                    <div className="grid grid-cols-2 gap-2">
-                      {[
-                        { r: 'customer' as Role, label: '👤 Customer', sub: 'Book Services' },
-                        { r: 'provider' as Role, label: '👷 Service Partner', sub: 'Receive Jobs' },
-                      ].map(item => (
-                        <button
-                          key={item.r}
-                          type="button"
-                          onClick={() => setRole(item.r)}
-                          className={`p-3 rounded-2xl border text-left transition-all ${
-                            role === item.r
-                              ? 'bg-brand-50/80 dark:bg-brand-500/15 border-brand-500 text-brand-600 dark:text-brand-400 font-bold ring-2 ring-brand-500/20'
-                              : 'bg-white dark:bg-navy-900 border-slate-200 dark:border-navy-700 text-slate-700 dark:text-slate-300'
-                          }`}
-                        >
-                          <p className="text-xs font-bold">{item.label}</p>
-                          <p className="text-[10px] text-slate-400 mt-0.5">{item.sub}</p>
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-
                   {/* Full Name */}
                   <div>
                     <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
@@ -367,7 +342,7 @@ export default function AuthCard({
               {/* Mobile Number Input */}
               <div>
                 <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
-                  Mobile Number *
+                  10-Digit Mobile Number *
                 </label>
                 <div className="flex gap-2">
                   <div className="px-3 py-2.5 rounded-xl bg-slate-100 dark:bg-navy-800 border border-slate-200 dark:border-navy-700 text-xs font-bold text-slate-700 dark:text-slate-200 flex items-center gap-1.5 flex-shrink-0 select-none">
@@ -391,49 +366,19 @@ export default function AuthCard({
                 </p>
               </div>
 
-              {/* Quick Test Demo Chips (Only Customer & Provider, Admin is removed) */}
-              <div className="pt-1 flex items-center justify-between text-[11px] text-slate-400">
-                <span>Quick demo fill:</span>
-                <div className="flex items-center gap-2">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setPhone('9845011111')
-                      setRole('customer')
-                      toast.success('Filled Customer demo number')
-                    }}
-                    className="text-brand-500 font-bold hover:underline"
-                  >
-                    Customer Demo
-                  </button>
-                  <span>•</span>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setPhone('9845022222')
-                      setRole('provider')
-                      toast.success('Filled Provider demo number')
-                    }}
-                    className="text-emerald-600 dark:text-emerald-400 font-bold hover:underline"
-                  >
-                    Provider Demo
-                  </button>
-                </div>
-              </div>
-
               {/* Send OTP CTA */}
               <button
                 type="button"
                 disabled={loading || getCleanPhone().length < 10}
                 onClick={handleSendOtp}
-                className="w-full py-3.5 rounded-2xl bg-gradient-to-r from-brand-500 to-brand-600 hover:from-brand-600 hover:to-brand-700 text-white font-bold text-xs shadow-brand transition-all flex items-center justify-center gap-2 disabled:opacity-50 active:scale-95 mt-1"
+                className="w-full py-3.5 rounded-2xl bg-gradient-to-r from-brand-500 to-brand-600 hover:from-brand-600 hover:to-brand-700 text-white font-bold text-xs shadow-brand transition-all flex items-center justify-center gap-2 disabled:opacity-50 active:scale-95 mt-2"
               >
                 <span>
                   {loading
                     ? 'Generating Code…'
                     : mode === 'login'
-                    ? 'Get 6-Digit OTP to Sign In'
-                    : 'Get Verification Code & Register'}
+                    ? `Get 6-Digit OTP (${role === 'provider' ? 'Partner' : 'Customer'})`
+                    : `Get OTP & Register (${role === 'provider' ? 'Partner' : 'Customer'})`}
                 </span>
                 <ArrowRight className="w-4 h-4" />
               </button>
@@ -542,92 +487,13 @@ export default function AuthCard({
             </div>
           )}
 
-          {/* Footer & Hidden Staff Portal Link */}
-          <div className="pt-2 border-t border-slate-100 dark:border-navy-800 flex items-center justify-between text-[11px] text-slate-400">
-            <span className="flex items-center gap-1">
-              <ShieldCheck className="w-3.5 h-3.5 text-emerald-500" />
-              <span>RBI & NPCI Secure</span>
-            </span>
-
-            {/* Hidden discrete Admin Access link (Not an open chip) */}
-            <button
-              type="button"
-              onClick={() => setShowAdminLogin(true)}
-              className="hover:text-slate-600 dark:hover:text-slate-300 underline transition-colors"
-            >
-              Staff Portal
-            </button>
+          {/* Clean Trust Footer - Zero Admin, Zero Demo */}
+          <div className="pt-2 border-t border-slate-100 dark:border-navy-800 flex items-center justify-center gap-2 text-[11px] text-slate-400">
+            <ShieldCheck className="w-3.5 h-3.5 text-emerald-500" />
+            <span>100% Encrypted & NPCI Secure • Instant Verification</span>
           </div>
         </div>
       </div>
-
-      {/* ── HIDDEN ADMIN / STAFF LOGIN MODAL ── */}
-      <AnimatePresence>
-        {showAdminLogin && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-            <motion.div
-              initial={{ scale: 0.95, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              exit={{ scale: 0.95, opacity: 0 }}
-              className="w-full max-w-sm bg-white dark:bg-navy-900 rounded-3xl p-6 shadow-2xl border border-slate-200 dark:border-navy-700 space-y-4 relative"
-            >
-              <button
-                type="button"
-                onClick={() => setShowAdminLogin(false)}
-                className="absolute top-4 right-4 w-7 h-7 rounded-full bg-slate-100 dark:bg-navy-800 flex items-center justify-center text-slate-400 hover:text-slate-800"
-              >
-                <X className="w-4 h-4" />
-              </button>
-
-              <div className="flex items-center gap-2 text-slate-900 dark:text-white">
-                <Lock className="w-5 h-5 text-brand-500" />
-                <h4 className="font-bold text-sm">Powerstar Staff Portal</h4>
-              </div>
-
-              <p className="text-xs text-slate-500 dark:text-slate-400">
-                Restricted access for internal dispatch managers and system administrators.
-              </p>
-
-              <form onSubmit={handleAdminSignIn} className="space-y-3">
-                <div>
-                  <label className="block text-[11px] font-semibold text-slate-700 dark:text-slate-300 mb-1">
-                    Staff Email
-                  </label>
-                  <input
-                    type="email"
-                    value={adminEmail}
-                    onChange={e => setAdminEmail(e.target.value)}
-                    required
-                    className="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-navy-700 bg-slate-50 dark:bg-navy-800 text-xs text-slate-900 dark:text-white font-mono"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-[11px] font-semibold text-slate-700 dark:text-slate-300 mb-1">
-                    Master Password
-                  </label>
-                  <input
-                    type="password"
-                    value={adminPassword}
-                    onChange={e => setAdminPassword(e.target.value)}
-                    required
-                    className="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-navy-700 bg-slate-50 dark:bg-navy-800 text-xs text-slate-900 dark:text-white font-mono"
-                  />
-                </div>
-
-                <button
-                  type="submit"
-                  disabled={loading}
-                  className="w-full py-2.5 rounded-xl bg-brand-500 hover:bg-brand-600 text-white font-bold text-xs shadow-brand transition-all flex items-center justify-center gap-1.5"
-                >
-                  <Zap className="w-3.5 h-3.5" />
-                  <span>{loading ? 'Authenticating…' : 'Authenticate Staff'}</span>
-                </button>
-              </form>
-            </motion.div>
-          </div>
-        )}
-      </AnimatePresence>
     </div>
   )
 }
