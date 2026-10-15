@@ -22,11 +22,12 @@ export function useAuth() {
           setProfile(dbProfile)
         } catch {
           const role = resolveFallbackRole(session.user)
+          const phoneNum = session.user.phone || session.user.user_metadata?.phone || '+91 98450 00000'
           setProfile({
             id: session.user.id,
             role,
-            full_name: session.user.user_metadata?.full_name || session.user.email?.split('@')[0] || 'User',
-            phone: session.user.user_metadata?.phone || '+91 98450 00000',
+            full_name: session.user.user_metadata?.full_name || (session.user.phone ? 'User (' + session.user.phone.slice(-4) + ')' : session.user.email?.split('@')[0] || 'User'),
+            phone: phoneNum,
             district: session.user.user_metadata?.district || 'Bengaluru Urban',
             is_active: true
           })
@@ -46,11 +47,12 @@ export function useAuth() {
           setProfile(dbProfile)
         } catch {
           const role = resolveFallbackRole(session.user)
+          const phoneNum = session.user.phone || session.user.user_metadata?.phone || '+91 98450 00000'
           setProfile({
             id: session.user.id,
             role,
-            full_name: session.user.user_metadata?.full_name || session.user.email?.split('@')[0] || 'User',
-            phone: session.user.user_metadata?.phone || '+91 98450 00000',
+            full_name: session.user.user_metadata?.full_name || (session.user.phone ? 'User (' + session.user.phone.slice(-4) + ')' : session.user.email?.split('@')[0] || 'User'),
+            phone: phoneNum,
             district: session.user.user_metadata?.district || 'Bengaluru Urban',
             is_active: true
           })
