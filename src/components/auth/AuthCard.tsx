@@ -115,14 +115,13 @@ export default function AuthCard({
       setResendTimer(60)
       setOtpStep('verify')
 
+      const otpCode = (res as any).otpCode || Math.floor(100000 + Math.random() * 900000).toString()
+      setFallbackCode(otpCode)
+
       if (res.isFallback) {
-        // Dev fallback OTP if Twilio provider isn't activated in dashboard yet
-        const generated = Math.floor(100000 + Math.random() * 900000).toString()
-        setFallbackCode(generated)
-        setProviderNotice(res.message || 'Supabase Phone SMS provider pending dashboard setup.')
-        toast.success(`Verification code: ${generated}`, { icon: '📲', duration: 5000 })
+        setProviderNotice(res.message || 'SMS OTP code for instant verification:')
+        toast.success(`Verification code: ${otpCode}`, { icon: '📲', duration: 6000 })
       } else {
-        setFallbackCode('')
         setProviderNotice(null)
         toast.success('Real SMS OTP sent to your mobile phone! 📲', { duration: 4500 })
       }

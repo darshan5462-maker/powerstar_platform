@@ -115,6 +115,70 @@ function razorpayDevApiPlugin(env: Record<string, string>) {
           return
         }
 
+        if (url === '/api/send-sms' && req.method === 'POST') {
+          let bodyStr = ''
+          req.on('data', (chunk: any) => { bodyStr += chunk })
+          req.on('end', async () => {
+            try {
+              const body = JSON.parse(bodyStr || '{}')
+              const { phone, otp } = body
+              const clean10 = (phone || '').replace(/\D/g, '').slice(-10)
+              const apiKey = env.FAST2SMS_API_KEY || 'nzhfm8Wc10ag6l47R5ETHQVedksJGbyNOFuIoiPDXpArKBtYSxUcGyhBxaV1uRKSldFY5ojO2C0r7JEf'
+              
+              const https = await import('https')
+              const postData = JSON.stringify({
+                variables_values: otp,
+                route: 'otp',
+                numbers: clean10
+              })
+              
+              const opt = {
+                hostname: 'www.fast2sms.com',
+                path: '/dev/bulkV2',
+                method: 'POST',
+                headers: {
+                  'authorization': apiKey,
+                  'Content-Type': 'application/json',
+                  'Content-Length': Buffer.byteLength(postData)
+                }
+              }
+
+              const fReq = https.request(opt, (fRes: any) => {
+                let data = ''
+                fRes.on('data', (c: any) => data += c)
+                fRes.on('end', () => {
+                  try {
+                    const parsed = JSON.parse(data)
+                    res.statusCode = 200
+                    res.setHeader('Content-Type', 'application/json')
+                    res.end(JSON.stringify({
+                      success: true,
+                      sentViaSms: !!parsed.return,
+                      notice: parsed.message
+                    }))
+                  } catch (e) {
+                    res.statusCode = 200
+                    res.setHeader('Content-Type', 'application/json')
+                    res.end(JSON.stringify({ success: true, sentViaSms: false }))
+                  }
+                })
+              })
+              fReq.on('error', () => {
+                res.statusCode = 200
+                res.setHeader('Content-Type', 'application/json')
+                res.end(JSON.stringify({ success: true, sentViaSms: false }))
+              })
+              fReq.write(postData)
+              fReq.end()
+            } catch (err: any) {
+              res.statusCode = 500
+              res.setHeader('Content-Type', 'application/json')
+              res.end(JSON.stringify({ success: false, error: err.message }))
+            }
+          })
+          return
+        }
+
         next()
       })
     }
