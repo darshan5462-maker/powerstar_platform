@@ -170,6 +170,12 @@ CREATE TABLE IF NOT EXISTS public.provider_locations (
   updated_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
+-- Ensure all GPS columns exist if provider_locations already existed previously
+ALTER TABLE public.provider_locations ADD COLUMN IF NOT EXISTS heading DOUBLE PRECISION DEFAULT 0;
+ALTER TABLE public.provider_locations ADD COLUMN IF NOT EXISTS speed DOUBLE PRECISION DEFAULT 0;
+ALTER TABLE public.provider_locations ADD COLUMN IF NOT EXISTS accuracy DOUBLE PRECISION DEFAULT 0;
+ALTER TABLE public.provider_locations ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT NOW();
+
 -- 8. CUSTOMER LOCATIONS TABLE
 CREATE TABLE IF NOT EXISTS public.customer_locations (
   booking_id   UUID PRIMARY KEY,

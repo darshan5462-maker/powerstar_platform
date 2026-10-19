@@ -149,6 +149,15 @@ CREATE TABLE IF NOT EXISTS public.providers (
   updated_at       TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
+-- Ensure all provider columns exist if providers already existed
+ALTER TABLE public.providers ADD COLUMN IF NOT EXISTS aadhaar_url TEXT;
+ALTER TABLE public.providers ADD COLUMN IF NOT EXISTS selfie_url TEXT;
+ALTER TABLE public.providers ADD COLUMN IF NOT EXISTS certificate_url TEXT;
+ALTER TABLE public.providers ADD COLUMN IF NOT EXISTS bank_passbook_url TEXT;
+ALTER TABLE public.providers ADD COLUMN IF NOT EXISTS bank_account_no TEXT;
+ALTER TABLE public.providers ADD COLUMN IF NOT EXISTS bank_ifsc TEXT;
+ALTER TABLE public.providers ADD COLUMN IF NOT EXISTS total_earnings NUMERIC(12,2) DEFAULT 0;
+
 -- ── 6. PROVIDER SERVICES (MULTI-CATEGORY SUPPORT) ─────────────────────────────
 CREATE TABLE IF NOT EXISTS public.provider_services (
   id               UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
@@ -171,6 +180,12 @@ CREATE TABLE IF NOT EXISTS public.provider_locations (
   accuracy    DOUBLE PRECISION DEFAULT 0,
   updated_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+
+-- Ensure all GPS columns exist if provider_locations already existed previously
+ALTER TABLE public.provider_locations ADD COLUMN IF NOT EXISTS heading DOUBLE PRECISION DEFAULT 0;
+ALTER TABLE public.provider_locations ADD COLUMN IF NOT EXISTS speed DOUBLE PRECISION DEFAULT 0;
+ALTER TABLE public.provider_locations ADD COLUMN IF NOT EXISTS accuracy DOUBLE PRECISION DEFAULT 0;
+ALTER TABLE public.provider_locations ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT NOW();
 
 -- ── 8. CUSTOMER LOCATIONS TABLE (FOR PROVIDER NAVIGATION) ─────────────────────
 CREATE TABLE IF NOT EXISTS public.customer_locations (
@@ -212,6 +227,22 @@ CREATE TABLE IF NOT EXISTS public.bookings (
   created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+
+-- Ensure all booking columns exist if bookings table already existed
+ALTER TABLE public.bookings ADD COLUMN IF NOT EXISTS category_slug TEXT;
+ALTER TABLE public.bookings ADD COLUMN IF NOT EXISTS start_otp TEXT;
+ALTER TABLE public.bookings ADD COLUMN IF NOT EXISTS end_otp TEXT;
+ALTER TABLE public.bookings ADD COLUMN IF NOT EXISTS customer_notes TEXT;
+ALTER TABLE public.bookings ADD COLUMN IF NOT EXISTS cancellation_reason TEXT;
+ALTER TABLE public.bookings ADD COLUMN IF NOT EXISTS scheduled_at TIMESTAMPTZ;
+ALTER TABLE public.bookings ADD COLUMN IF NOT EXISTS accepted_at TIMESTAMPTZ;
+ALTER TABLE public.bookings ADD COLUMN IF NOT EXISTS started_at TIMESTAMPTZ;
+ALTER TABLE public.bookings ADD COLUMN IF NOT EXISTS completed_at TIMESTAMPTZ;
+ALTER TABLE public.bookings ADD COLUMN IF NOT EXISTS cancelled_at TIMESTAMPTZ;
+ALTER TABLE public.bookings ADD COLUMN IF NOT EXISTS base_amount NUMERIC(10,2) DEFAULT 11;
+ALTER TABLE public.bookings ADD COLUMN IF NOT EXISTS platform_fee NUMERIC(10,2) DEFAULT 0;
+ALTER TABLE public.bookings ADD COLUMN IF NOT EXISTS gst_amount NUMERIC(10,2) DEFAULT 0;
+ALTER TABLE public.bookings ADD COLUMN IF NOT EXISTS total_amount NUMERIC(10,2) DEFAULT 11;
 
 -- Add foreign key constraint to customer_locations referencing bookings
 DO $$ BEGIN
