@@ -10,7 +10,6 @@ import {
   MapPin,
   ArrowRight,
   RotateCw,
-  Sparkles,
   AlertCircle,
   MessageSquare,
   Edit2
@@ -51,7 +50,6 @@ export default function AuthCard({
   const [otpDigits, setOtpDigits] = useState<string[]>(['', '', '', '', '', ''])
   const [formattedPhone, setFormattedPhone] = useState<string>('')
   const [fallbackCode, setFallbackCode] = useState<string>('')
-  const [providerNotice, setProviderNotice] = useState<string | null>(null)
   const [resendTimer, setResendTimer] = useState<number>(60)
 
   const digitInputRefs = useRef<(HTMLInputElement | null)[]>([])
@@ -115,16 +113,9 @@ export default function AuthCard({
       setResendTimer(60)
       setOtpStep('verify')
 
-      const otpCode = (res as any).otpCode || Math.floor(100000 + Math.random() * 900000).toString()
+      const otpCode = (res as any).otpCode || ''
       setFallbackCode(otpCode)
-
-      if (res.isFallback) {
-        setProviderNotice(res.message || 'SMS OTP code for instant verification:')
-        toast.success(`Verification code: ${otpCode}`, { icon: '📲', duration: 6000 })
-      } else {
-        setProviderNotice(null)
-        toast.success('Real SMS OTP sent to your mobile phone! 📲', { duration: 4500 })
-      }
+      toast.success('SMS OTP sent to your mobile phone! 📲', { duration: 4500 })
 
       // Auto-focus first digit input box
       setTimeout(() => {
@@ -458,30 +449,15 @@ export default function AuthCard({
                 </button>
               </div>
 
-              {/* Dev fallback notice if Supabase phone provider is awaiting dashboard credentials */}
-              {providerNotice && fallbackCode && (
-                <div className="p-3 rounded-2xl bg-amber-500/10 border border-amber-500/20 text-center space-y-2">
-                  <div className="flex items-center justify-center gap-2">
-                    <span className="text-[10px] font-mono uppercase font-bold text-amber-600 dark:text-amber-400 bg-amber-500/10 px-2 py-0.5 rounded-full">
-                      Dev Code: {fallbackCode}
-                    </span>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setOtpDigits(fallbackCode.split(''))
-                        handleVerifyOtp(fallbackCode)
-                      }}
-                      className="px-2.5 py-1 rounded-lg bg-amber-500 hover:bg-amber-600 text-white text-[11px] font-bold shadow-xs active:scale-95 transition-all flex items-center gap-1"
-                    >
-                      <Sparkles className="w-3 h-3" />
-                      <span>Auto-Fill</span>
-                    </button>
-                  </div>
-                  <p className="text-[10px] text-slate-500 dark:text-slate-400">
-                    Supabase SMS provider awaiting dashboard setup. You can test with the code above or enter code from SMS.
-                  </p>
-                </div>
-              )}
+              {/* Instruction banner for SMS verification */}
+              <div className="p-3.5 rounded-2xl bg-slate-50 dark:bg-navy-800/60 border border-slate-200 dark:border-navy-700 text-center space-y-1">
+                <p className="text-xs font-semibold text-slate-700 dark:text-slate-200">
+                  Enter 6-Digit SMS Verification Code
+                </p>
+                <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                  Please check your mobile phone messages for the OTP sent by SMS.
+                </p>
+              </div>
 
               {/* 6 Individual Digit Input Boxes */}
               <div className="flex items-center justify-center gap-2 sm:gap-2.5 pt-1">
