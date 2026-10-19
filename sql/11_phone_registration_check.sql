@@ -1,8 +1,40 @@
 -- ============================================================
--- 11. Allow Phone Number Lookup for Registration & Login Checks
+-- 11. Enforce 1 Mobile Number = 1 Account & Enable Lookup
+-- Run this in Supabase Dashboard -> SQL Editor -> New Query -> Run
 -- ============================================================
 
--- 1. Create a secure SECURITY DEFINER function to check if a phone number exists
+-- 1. Deduplicate any existing duplicate profiles with the same 10-digit phone
+DELETE FROM public.profiles
+WHERE id IN (
+  SELECT id FROM (
+    SELECT id,
+           ROW_NUMBER() OVER (
+             PARTITION BY right(regexp_replace(COALESCE(phone, ''), '\D', '', 'g'), 10)
+             ORDER BY created_at ASC, id ASC
+           ) as rn
+    FROM public.profiles
+    WHERE phone IS NOT NULL AND length(right(regexp_replace(phone, '\D', '', 'g'), 10)) = 10
+  ) t
+  WHERE t.rn > 1
+);
+
+-- 2. Enforce UNIQUE constraint on 10-digit mobile number (1 number = 1 account ONLY)
+DROP INDEX IF EXISTS idx_profiles_unique_clean_phone;
+CREATE UNIQUE INDEX idx_profiles_unique_clean_phone
+ON public.profiles (right(regexp_replace(COALESCE(phone, ''), '\D', '', 'g'), 10))
+WHERE phone IS NOT NULL AND length(right(regexp_replace(phone, '\D', '', 'g'), 10)) = 10;
+
+-- 3. Allow SELECT on profiles so registration status can be verified before sending OTP
+DROP POLICY IF EXISTS "profiles_select_own" ON public.profiles;
+DROP POLICY IF EXISTS "profiles_allow_phone_lookup" ON public.profiles;
+DROP POLICY IF EXISTS "profiles_select_public_providers" ON public.profiles;
+DROP POLICY IF EXISTS "profiles_read_all" ON public.profiles;
+
+CREATE POLICY "profiles_read_all"
+ON public.profiles FOR SELECT
+USING (true);
+
+-- 4. Create secure SECURITY DEFINER RPC function to check if phone exists
 CREATE OR REPLACE FUNCTION public.check_phone_registered(check_phone text)
 RETURNS jsonb
 LANGUAGE plpgsql
@@ -13,7 +45,6 @@ DECLARE
   clean_num text;
   found_profile record;
 BEGIN
-  -- Extract last 10 digits to match any Indian phone format
   clean_num := right(regexp_replace(COALESCE(check_phone, ''), '\D', '', 'g'), 10);
 
   IF clean_num IS NULL OR length(clean_num) < 10 THEN
@@ -38,18 +69,4 @@ BEGIN
 END;
 $$;
 
--- Grant execution to anonymous and authenticated users
 GRANT EXECUTE ON FUNCTION public.check_phone_registered(text) TO anon, authenticated, service_role;
-
--- 2. Allow SELECT policy for phone verification on profiles
-DO $$
-BEGIN
-  IF NOT EXISTS (
-    SELECT 1 FROM pg_policies WHERE tablename = 'profiles' AND policyname = 'profiles_allow_phone_lookup'
-  ) THEN
-    CREATE POLICY "profiles_allow_phone_lookup"
-    ON public.profiles FOR SELECT
-    TO anon, authenticated
-    USING (true);
-  END IF;
-END $$;

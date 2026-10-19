@@ -93,7 +93,7 @@ export async function checkPhoneRegistrationStatus(rawPhone: string): Promise<Ph
     const { data, error } = await supabase
       .from('profiles')
       .select('id, role, full_name, phone')
-      .or(`phone.eq.${formatted},phone.eq.+91 ${clean10},phone.eq.${clean10}`)
+      .or(`phone.eq.${formatted},phone.eq.+91 ${clean10},phone.eq.${clean10},phone.ilike.%${clean10}%`)
       .limit(1)
       .maybeSingle()
 
@@ -126,7 +126,18 @@ export async function checkPhoneRegistrationStatus(rawPhone: string): Promise<Ph
     // ignore
   }
 
-  // 4. Check client-side registry cache
+  // 4. Check currently active or cached auth state
+  try {
+    const curProfile = useAuthStore.getState().profile
+    if (curProfile?.phone && curProfile.phone.replace(/\D/g, '').endsWith(clean10)) {
+      recordRegisteredPhone(formatted)
+      return { isRegistered: true, profile: curProfile as any }
+    }
+  } catch (e) {
+    // ignore
+  }
+
+  // 5. Check client-side registry cache
   if (isPhoneInLocalRegistry(clean10)) {
     return {
       isRegistered: true,
@@ -317,7 +328,7 @@ export async function verifyPhoneOtp(params: {
       const { data: phoneProfile } = await supabase
         .from('profiles')
         .select('*')
-        .or(`phone.eq.${formattedPhone},phone.eq.+91 ${clean10},phone.eq.${clean10}`)
+        .or(`phone.eq.${formattedPhone},phone.eq.+91 ${clean10},phone.eq.${clean10},phone.ilike.%${clean10}%`)
         .limit(1)
         .maybeSingle()
 
@@ -330,11 +341,23 @@ export async function verifyPhoneOtp(params: {
   }
 
   if (!activeProfile) {
-    // If user was trying to Sign In (not sign up), do not create a new account
-    if (!params.isSignUp) {
-      throw new Error('No registered account found with this mobile number. Please click Create Account to register first.')
+    const regCheck = await checkPhoneRegistrationStatus(formattedPhone)
+    if (regCheck.isRegistered && regCheck.profile) {
+      activeProfile = regCheck.profile as any
     }
+  }
 
+  // Strict guard: if profile exists and user is trying to register again, reject!
+  if (activeProfile && params.isSignUp) {
+    throw new Error('This mobile number is already registered! Please switch to Sign In to access your account.')
+  }
+
+  // Strict guard: if profile does not exist and user is trying to sign in, reject!
+  if (!activeProfile && !params.isSignUp) {
+    throw new Error('No registered account found with this mobile number. Please click Create Account to register first.')
+  }
+
+  if (!activeProfile) {
     // Create new profile record for valid sign-up
     const newProfile: Profile = {
       id: userId,
@@ -346,7 +369,13 @@ export async function verifyPhoneOtp(params: {
     }
 
     try {
-      await supabase.from('profiles').upsert(newProfile)
+      const { error: insErr } = await supabase.from('profiles').insert(newProfile)
+      if (insErr) {
+        if (insErr.code === '23505' || insErr.message?.toLowerCase().includes('duplicate') || insErr.message?.toLowerCase().includes('unique')) {
+          throw new Error('This mobile number is already registered! Please switch to Sign In to access your account.')
+        }
+        await supabase.from('profiles').upsert(newProfile)
+      }
       recordRegisteredPhone(formattedPhone)
       if (safeRole === 'provider') {
         await supabase.from('providers').upsert({
@@ -362,16 +391,13 @@ export async function verifyPhoneOtp(params: {
           total_earnings: 0
         })
       }
-    } catch (e) {
+    } catch (e: any) {
+      if (e?.message?.includes('already registered')) throw e
       console.warn('Profile sync warning:', e)
     }
 
     activeProfile = newProfile
   } else {
-    // If profile already exists and user was trying to register another account
-    if (params.isSignUp) {
-      throw new Error('This mobile number is already registered! Please switch to Sign In to access your account.')
-    }
     recordRegisteredPhone(formattedPhone)
 
     if (params.fullName) {
