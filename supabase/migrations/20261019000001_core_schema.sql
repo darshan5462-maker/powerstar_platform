@@ -109,6 +109,13 @@ CREATE TABLE IF NOT EXISTS public.service_categories (
   created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
+-- Drop legacy unique constraint on name if it exists so slug is the authoritative unique identifier
+DO $$ BEGIN
+  ALTER TABLE public.service_categories DROP CONSTRAINT IF EXISTS service_categories_name_key;
+  DROP INDEX IF EXISTS service_categories_name_key;
+EXCEPTION WHEN OTHERS THEN null;
+END $$;
+
 -- 5. PROVIDERS TABLE
 CREATE TABLE IF NOT EXISTS public.providers (
   id               UUID PRIMARY KEY REFERENCES public.profiles(id) ON DELETE CASCADE,

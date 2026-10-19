@@ -111,6 +111,13 @@ CREATE TABLE IF NOT EXISTS public.service_categories (
   created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
+-- Drop legacy unique constraint on name if it exists so slug is the authoritative unique identifier
+DO $$ BEGIN
+  ALTER TABLE public.service_categories DROP CONSTRAINT IF EXISTS service_categories_name_key;
+  DROP INDEX IF EXISTS service_categories_name_key;
+EXCEPTION WHEN OTHERS THEN null;
+END $$;
+
 -- ── 5. PROVIDERS TABLE ────────────────────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS public.providers (
   id               UUID PRIMARY KEY REFERENCES public.profiles(id) ON DELETE CASCADE,
@@ -491,6 +498,21 @@ EXCEPTION WHEN OTHERS THEN null;
 END $$;
 
 -- ── 18. SEED ALL 42 SERVICE CATEGORIES & RATE CARDS ──────────────────────────
+-- Drop legacy unique constraint on name and normalize legacy slugs to prevent 23505 duplicate key error
+DO $$ BEGIN
+  ALTER TABLE public.service_categories DROP CONSTRAINT IF EXISTS service_categories_name_key;
+  DROP INDEX IF EXISTS service_categories_name_key;
+
+  UPDATE public.service_categories SET slug = 'dl' 
+  WHERE (name ILIKE '%driving%license%' OR slug = 'driving-license') AND slug != 'dl'
+    AND NOT EXISTS (SELECT 1 FROM public.service_categories WHERE slug = 'dl');
+
+  UPDATE public.service_categories SET slug = 'passing' 
+  WHERE (name ILIKE '%vehicle%passing%' OR slug = 'vehicle-passing') AND slug != 'passing'
+    AND NOT EXISTS (SELECT 1 FROM public.service_categories WHERE slug = 'passing');
+EXCEPTION WHEN OTHERS THEN null;
+END $$;
+
 INSERT INTO public.service_categories (name, name_kn, slug, icon, type, base_price, price_unit, sort_order, description) VALUES
 -- Manpower (20)
 ('Electrician', 'ವಿದ್ಯುತ್ ತಂತ್ರಜ್ಞ', 'electrician', '⚡', 'manpower', 280, '/hr', 1, 'Wiring, fans, switches, MCB, inverter installation'),
