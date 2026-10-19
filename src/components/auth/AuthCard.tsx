@@ -51,6 +51,7 @@ export default function AuthCard({
   const [formattedPhone, setFormattedPhone] = useState<string>('')
   const [fallbackCode, setFallbackCode] = useState<string>('')
   const [resendTimer, setResendTimer] = useState<number>(60)
+  const [isFreeTestMode, setIsFreeTestMode] = useState<boolean>(false)
 
   const digitInputRefs = useRef<(HTMLInputElement | null)[]>([])
 
@@ -134,7 +135,8 @@ export default function AuthCard({
         fullName,
         role,
         district,
-        isSignUp: mode === 'register'
+        isSignUp: mode === 'register',
+        skipSms: isFreeTestMode
       })
 
       setFormattedPhone(res.formattedPhone)
@@ -142,9 +144,13 @@ export default function AuthCard({
       setResendTimer(60)
       setOtpStep('verify')
 
-      const otpCode = (res as any).otpCode || ''
+      const otpCode = (res as any).otpCode || (isFreeTestMode ? '123456' : '')
       setFallbackCode(otpCode)
-      toast.success('SMS OTP sent to your mobile phone! 📲', { duration: 4500 })
+      if (isFreeTestMode) {
+        toast.success('Free Test Mode: Enter 123456 to continue (₹0 cost)! ⚡', { duration: 5000 })
+      } else {
+        toast.success('SMS OTP sent to your mobile phone! 📲', { duration: 4500 })
+      }
 
       // Auto-focus first digit input box
       setTimeout(() => {
@@ -437,8 +443,34 @@ export default function AuthCard({
                   </div>
                 </div>
                 <p className="text-[10px] text-slate-400 mt-1">
-                  We'll send a real 6-digit SMS verification OTP to this mobile number.
+                  We'll send a 6-digit SMS verification OTP to this mobile number.
                 </p>
+              </div>
+
+              {/* Free Test Mode Toggle (protects Fast2SMS balance) */}
+              <div className="flex items-center justify-between p-3 rounded-2xl bg-amber-500/10 border border-amber-500/20 text-xs">
+                <div className="space-y-0.5">
+                  <div className="flex items-center gap-1.5 font-bold text-amber-700 dark:text-amber-300">
+                    <Zap className="w-3.5 h-3.5" />
+                    <span>Free Testing Mode</span>
+                  </div>
+                  <p className="text-[10px] text-slate-500 dark:text-slate-400">
+                    {isFreeTestMode
+                      ? 'Skips sending SMS (Enter code 123456) • ₹0 cost'
+                      : 'Sends real SMS to your phone via Fast2SMS'}
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setIsFreeTestMode(!isFreeTestMode)}
+                  className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all shadow-xs ${
+                    isFreeTestMode
+                      ? 'bg-amber-500 hover:bg-amber-600 text-white'
+                      : 'bg-slate-200 dark:bg-navy-700 text-slate-700 dark:text-slate-300 hover:bg-slate-300'
+                  }`}
+                >
+                  {isFreeTestMode ? 'Active (123456)' : 'Enable Free'}
+                </button>
               </div>
 
               {/* Send SMS OTP CTA */}
@@ -493,10 +525,12 @@ export default function AuthCard({
               {/* Instruction banner for SMS verification */}
               <div className="p-3.5 rounded-2xl bg-slate-50 dark:bg-navy-800/60 border border-slate-200 dark:border-navy-700 text-center space-y-1">
                 <p className="text-xs font-semibold text-slate-700 dark:text-slate-200">
-                  Enter 6-Digit SMS Verification Code
+                  {isFreeTestMode ? 'Free Test Mode: Enter 123456' : 'Enter 6-Digit SMS Verification Code'}
                 </p>
                 <p className="text-[11px] text-slate-500 dark:text-slate-400">
-                  Please check your mobile phone messages for the OTP sent by SMS.
+                  {isFreeTestMode
+                    ? 'Testing mode active without sending SMS. Enter code 123456 to verify.'
+                    : 'Please check your mobile phone messages for the OTP sent by SMS.'}
                 </p>
               </div>
 

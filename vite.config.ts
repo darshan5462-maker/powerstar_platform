@@ -128,7 +128,7 @@ function razorpayDevApiPlugin(env: Record<string, string>) {
               const https = await import('https')
               const postData = JSON.stringify({
                 route: 'q',
-                message: `Your POWERSTAR verification code is: ${otp}. Do not share this code with anyone.`,
+                message: `POWERSTAR OTP: ${otp}`,
                 numbers: clean10
               })
               

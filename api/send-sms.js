@@ -31,10 +31,10 @@ export default async function handler(req, res) {
       return res.status(400).json({ error: 'OTP code required' })
     }
 
-    // Call Fast2SMS using Quick SMS route 'q'
+    // Call Fast2SMS using Quick SMS route 'q' (ultra-short to consume minimal credits)
     const postData = JSON.stringify({
       route: 'q',
-      message: `Your POWERSTAR verification code is: ${otp}. Do not share this code with anyone.`,
+      message: `POWERSTAR OTP: ${otp}`,
       numbers: clean10
     })
 

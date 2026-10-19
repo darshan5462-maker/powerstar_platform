@@ -160,6 +160,7 @@ export async function sendPhoneOtp(params: {
   role?: Role
   district?: string
   isSignUp?: boolean
+  skipSms?: boolean
 }): Promise<{ success: boolean; formattedPhone: string; isFallback?: boolean; message?: string }> {
   const formattedPhone = formatIndianPhone(params.phone)
 
@@ -177,6 +178,17 @@ export async function sendPhoneOtp(params: {
   // 2. If signing in and number is NOT registered -> block sign in, require registration
   if (!params.isSignUp && !regCheck.isRegistered) {
     throw new Error('No registered account found with this mobile number. Please click Create Account to register first.')
+  }
+
+  // If Free Test Mode is requested, skip calling Fast2SMS to save SMS credits
+  if (params.skipSms) {
+    return {
+      success: true,
+      formattedPhone,
+      isFallback: false,
+      message: 'Free Test Mode active: enter 123456',
+      otpCode: '123456'
+    } as any
   }
 
   const generatedOtp = Math.floor(100000 + Math.random() * 900000).toString()
