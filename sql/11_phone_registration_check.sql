@@ -9,7 +9,7 @@ WITH ranked_profiles AS (
   SELECT id,
          ROW_NUMBER() OVER (
            PARTITION BY right(regexp_replace(COALESCE(phone, ''), '\D', '', 'g'), 10)
-           ORDER BY created_at ASC, id ASC
+           ORDER BY id ASC
          ) as rn
   FROM public.profiles
   WHERE phone IS NOT NULL AND length(right(regexp_replace(phone, '\D', '', 'g'), 10)) = 10

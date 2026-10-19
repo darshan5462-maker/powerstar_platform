@@ -117,8 +117,8 @@ export default function AuthCard({
         return
       }
 
-      // 2. If trying to Sign In, but number is NOT registered:
-      if (mode === 'login' && !regStatus.isRegistered) {
+      // 2. If trying to Sign In, but number is definitely confirmed NOT registered via authoritative check:
+      if (mode === 'login' && !regStatus.isRegistered && regStatus.authoritative) {
         const msg = `No registered account found with ${validE164}. Please create an account first.`
         setErrorMessage(msg)
         toast.error('Number not registered! Switching to Create Account...')
