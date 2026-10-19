@@ -138,21 +138,16 @@ export async function createBooking(payload: {
       // ignore
     }
 
-    // If still not a valid UUID, find an existing profile ID from Supabase
+    // If still not a valid UUID, generate a deterministic UUID if phone-based or fresh unique UUID
     if (!isUUID(validCustomerId)) {
-      try {
-        const { data: existingProf } = await supabase
-          .from('profiles')
-          .select('id')
-          .limit(1)
-          .maybeSingle()
-        if (existingProf?.id && isUUID(existingProf.id)) {
-          validCustomerId = existingProf.id
-        } else {
-          validCustomerId = 'c0000000-0000-4000-8000-000000000001'
-        }
-      } catch (e) {
-        validCustomerId = 'c0000000-0000-4000-8000-000000000001'
+      const digits = (validCustomerId || '').replace(/\D/g, '').slice(-10)
+      if (digits.length === 10) {
+        validCustomerId = `00000000-0000-4000-a000-${digits.padStart(12, '0')}`
+      } else {
+        validCustomerId = 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => {
+          const r = Math.random() * 16 | 0
+          return (c === 'x' ? r : (r & 0x3 | 0x8)).toString(16)
+        })
       }
     }
 
@@ -384,42 +379,33 @@ export async function getAllBookingsAdmin(): Promise<Booking[]> {
 
 export async function getCustomerBookings(customerId: string): Promise<Booking[]> {
   try {
+    if (!customerId || customerId === 'usr_cust_demo') {
+      return []
+    }
+
     const allLocal = getLocalBookings()
-    const localRefs = allLocal.map(b => b.booking_ref).filter(Boolean)
+    // STRICT ISOLATION: Only retrieve bookings that strictly belong to THIS customer
+    const userLocal = allLocal.filter(b => b.customer_id === customerId)
+    const userLocalRefs = userLocal.map(b => b.booking_ref).filter(Boolean)
     const isUUID = (str: string) => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(str || '')
 
     let dbBookings: any[] = []
 
-    // 1. Fetch from Supabase with flexible matching
+    // 1. Fetch strictly THIS customer's bookings from Supabase
     try {
       if (isUUID(customerId)) {
-        if (localRefs.length > 0) {
-          const { data } = await supabase
-            .from('bookings')
-            .select('*')
-            .or(`customer_id.eq.${customerId},booking_ref.in.(${localRefs.map(r => `"${r}"`).join(',')})`)
-            .order('created_at', { ascending: false })
-          if (data) dbBookings = data
-        } else {
-          const { data } = await supabase
-            .from('bookings')
-            .select('*')
-            .eq('customer_id', customerId)
-            .order('created_at', { ascending: false })
-          if (data) dbBookings = data
-        }
-      } else if (localRefs.length > 0) {
         const { data } = await supabase
           .from('bookings')
           .select('*')
-          .in('booking_ref', localRefs)
+          .eq('customer_id', customerId)
           .order('created_at', { ascending: false })
         if (data) dbBookings = data
-      } else {
+      } else if (userLocalRefs.length > 0) {
+        // Non-UUID IDs: only match their own local booking references
         const { data } = await supabase
           .from('bookings')
           .select('*')
-          .limit(20)
+          .in('booking_ref', userLocalRefs)
           .order('created_at', { ascending: false })
         if (data) dbBookings = data
       }
@@ -459,22 +445,20 @@ export async function getCustomerBookings(customerId: string): Promise<Booking[]
       }
     })
 
-    // Merge with local bookings, prioritizing DB state when booking_ref matches
+    // Merge only with THIS customer's local bookings
     const dbRefMap = new Map(enrichedDbList.map(b => [b.booking_ref, b]))
     const mergedList: Booking[] = [...enrichedDbList]
 
-    for (const lb of allLocal) {
+    for (const lb of userLocal) {
       if (!dbRefMap.has(lb.booking_ref)) {
-        if (!customerId || lb.customer_id === customerId || (customerId.startsWith('usr_') && (!lb.customer_id || lb.customer_id.startsWith('usr_')))) {
-          mergedList.push(lb)
-        }
+        mergedList.push(lb)
       }
     }
 
     return mergedList.sort((a, b) => new Date(b.created_at || '').getTime() - new Date(a.created_at || '').getTime())
   } catch (err) {
     console.error('getCustomerBookings error:', err)
-    return getLocalBookings()
+    return []
   }
 }
 

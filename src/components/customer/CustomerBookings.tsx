@@ -38,14 +38,23 @@ export default function CustomerBookings() {
   const [reviewModalBooking, setReviewModalBooking] = useState<Booking | null>(null)
 
   const fetchBookings = async () => {
-    const customerId = profile?.id || 'usr_cust_demo'
+    if (!profile?.id) {
+      setBookings([])
+      setLoading(false)
+      return
+    }
     setLoading(true)
-    const data = await getCustomerBookings(customerId)
+    const data = await getCustomerBookings(profile.id)
     setBookings(data)
     setLoading(false)
   }
 
   useEffect(() => {
+    if (!profile?.id) {
+      setBookings([])
+      setLoading(false)
+      return
+    }
     fetchBookings()
     const interval = setInterval(fetchBookings, 4000)
     const handleStorage = (e: StorageEvent) => {

@@ -37,7 +37,12 @@ export default function CustomerHome() {
   const firstName = profile?.full_name?.split(' ')[0] || 'Friend'
 
   useEffect(() => {
-    const customerId = profile?.id || 'usr_cust_demo'
+    if (!profile?.id) {
+      setActiveBookings([])
+      setLoading(false)
+      return
+    }
+    const customerId = profile.id
     const fetchActive = async () => {
       setLoading(true)
       const data = await getCustomerBookings(customerId)
@@ -48,7 +53,7 @@ export default function CustomerHome() {
       setLoading(false)
     }
     fetchActive()
-    const interval = setInterval(fetchActive, 30000)
+    const interval = setInterval(fetchActive, 10000)
     const handleStorage = (e: StorageEvent) => {
       if (e.key === 'ps_bookings_sync_v2') fetchActive()
     }

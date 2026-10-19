@@ -49,7 +49,11 @@ export default function CustomerTrack() {
   const [reviewModalOpen, setReviewModalOpen] = useState(false)
 
   const loadBookings = useCallback(async (isBackground = false) => {
-    if (!profile?.id) return
+    if (!profile?.id) {
+      setBookings([])
+      if (!isBackground) setLoading(false)
+      return
+    }
     if (!isBackground) setLoading(true)
     const data = await getCustomerBookings(profile.id)
     setBookings(data)

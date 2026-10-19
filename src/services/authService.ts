@@ -20,6 +20,12 @@ export function formatIndianPhone(phone: string): string {
   throw new Error('Please enter a valid 10-digit mobile number.')
 }
 
+export function phoneToUUID(phone: string): string {
+  const digits = phone.replace(/\D/g, '').slice(-10)
+  const padded = digits.padStart(12, '0')
+  return `00000000-0000-4000-a000-${padded}`
+}
+
 // ── LOCAL REGISTRY HELPER (for immediate client persistence across sessions) ──
 const REGISTRY_KEY = 'powerstar_registered_phones'
 
@@ -142,7 +148,7 @@ export async function checkPhoneRegistrationStatus(rawPhone: string): Promise<Ph
     return {
       isRegistered: true,
       profile: {
-        id: 'usr_cached',
+        id: phoneToUUID(formatted),
         role: 'customer',
         full_name: 'Registered User',
         phone: formatted
@@ -267,7 +273,7 @@ export async function verifyPhoneOtp(params: {
     if (error) {
       if ((params.expectedOtpFallback && cleanToken === params.expectedOtpFallback) || cleanToken === '123456') {
         authUser = {
-          id: 'usr_' + Date.now(),
+          id: phoneToUUID(formattedPhone),
           phone: formattedPhone,
           user_metadata: {
             full_name: params.fullName || `User (${formattedPhone.slice(-4)})`,
@@ -287,7 +293,7 @@ export async function verifyPhoneOtp(params: {
       authSession = data.session
     } else if ((params.expectedOtpFallback && cleanToken === params.expectedOtpFallback) || cleanToken === '123456') {
       authUser = {
-        id: 'usr_' + Date.now(),
+        id: phoneToUUID(formattedPhone),
         phone: formattedPhone,
         user_metadata: {
           full_name: params.fullName || `User (${formattedPhone.slice(-4)})`,
@@ -299,7 +305,7 @@ export async function verifyPhoneOtp(params: {
   } catch (authErr: any) {
     if ((params.expectedOtpFallback && cleanToken === params.expectedOtpFallback) || cleanToken === '123456') {
       authUser = {
-        id: 'usr_' + Date.now(),
+        id: phoneToUUID(formattedPhone),
         phone: formattedPhone,
         user_metadata: {
           full_name: params.fullName || `User (${formattedPhone.slice(-4)})`,
@@ -536,6 +542,11 @@ export async function signUp(params: { email: string; password: string; full_nam
 
 export async function signOut() {
   useAuthStore.getState().reset()
+  try {
+    localStorage.removeItem('ps_bookings_sync_v2')
+  } catch (e) {
+    // ignore
+  }
   try {
     await supabase.auth.signOut()
   } catch (e) {
