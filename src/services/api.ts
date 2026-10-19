@@ -1064,7 +1064,7 @@ function getMockVerifiedProviders(district?: string): ProviderProfile[] {
   const targetDistrict = district || 'Bengaluru Urban'
   return [
     {
-      id: 'prov-mock-1',
+      id: '00000000-0000-4000-a000-009845012345',
       experience_years: 6,
       hourly_rate: 280,
       bio: 'Certified Master Electrician & Power Systems Specialist',
@@ -1077,7 +1077,7 @@ function getMockVerifiedProviders(district?: string): ProviderProfile[] {
       total_jobs: 310,
       total_earnings: 86800,
       profile: {
-        id: 'prov-mock-1',
+        id: '00000000-0000-4000-a000-009845012345',
         role: 'provider',
         full_name: 'Basavaraj Patil (Master Electrician)',
         phone: '+91 98450 12345',
@@ -1093,7 +1093,7 @@ function getMockVerifiedProviders(district?: string): ProviderProfile[] {
       }
     },
     {
-      id: 'prov-mock-2',
+      id: '00000000-0000-4000-a000-009448067890',
       experience_years: 8,
       hourly_rate: 260,
       bio: 'Expert Residential & Commercial Plumbing Contractor',
@@ -1106,7 +1106,7 @@ function getMockVerifiedProviders(district?: string): ProviderProfile[] {
       total_jobs: 245,
       total_earnings: 63700,
       profile: {
-        id: 'prov-mock-2',
+        id: '00000000-0000-4000-a000-009448067890',
         role: 'provider',
         full_name: 'Manjunath Gowda (Master Plumber)',
         phone: '+91 94480 67890',
@@ -1122,7 +1122,7 @@ function getMockVerifiedProviders(district?: string): ProviderProfile[] {
       }
     },
     {
-      id: 'prov-mock-3',
+      id: '00000000-0000-4000-a000-009980054321',
       experience_years: 5,
       hourly_rate: 899,
       bio: 'Commercial Goods Transport & Tata Ace Fast Delivery',
@@ -1135,7 +1135,7 @@ function getMockVerifiedProviders(district?: string): ProviderProfile[] {
       total_jobs: 412,
       total_earnings: 370388,
       profile: {
-        id: 'prov-mock-3',
+        id: '00000000-0000-4000-a000-009980054321',
         role: 'provider',
         full_name: 'Ramesh Kumbar (Tata Ace Logistics)',
         phone: '+91 99800 54321',
@@ -1151,7 +1151,7 @@ function getMockVerifiedProviders(district?: string): ProviderProfile[] {
       }
     },
     {
-      id: 'prov-mock-4',
+      id: '00000000-0000-4000-a000-009741011223',
       experience_years: 4,
       hourly_rate: 200,
       bio: 'Professional Home Deep Cleaning & Sanitization Team Leader',
@@ -1164,7 +1164,7 @@ function getMockVerifiedProviders(district?: string): ProviderProfile[] {
       total_jobs: 160,
       total_earnings: 32000,
       profile: {
-        id: 'prov-mock-4',
+        id: '00000000-0000-4000-a000-009741011223',
         role: 'provider',
         full_name: 'Anand Kumar (Cleaning Specialist)',
         phone: '+91 97410 11223',

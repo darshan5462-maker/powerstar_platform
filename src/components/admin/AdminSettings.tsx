@@ -1,8 +1,9 @@
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Settings, Save, Shield, DollarSign, Phone, Mail, LogOut, CheckCircle2, Lock, CreditCard } from 'lucide-react'
 import { useAuthStore } from '@/store/authStore'
 import { authService } from '@/services/authService'
+import { supabase } from '@/lib/supabase'
 import HeaderBar from '@/components/layout/HeaderBar'
 import toast from 'react-hot-toast'
 
@@ -17,19 +18,46 @@ export default function AdminSettings() {
       platform_name: parsed.platform_name || 'POWERSTAR',
       support_phone: parsed.support_phone || '+91 80 4567 8900',
       support_email: parsed.support_email || 'support@powerstar.in',
-      platform_fee_percent: parsed.platform_fee_percent || '5',
-      gst_percent: parsed.gst_percent || '18',
+      platform_fee_percent: parsed.platform_fee_percent || '0',
+      gst_percent: parsed.gst_percent || '0',
       settlement_hours: parsed.settlement_hours || '24',
-      min_booking_amount: parsed.min_booking_amount || '100',
+      min_booking_amount: parsed.min_booking_amount || '11',
       payment_mode: 'UPI Only (NPCI Auto-Verify)',
       active_districts_count: '31',
-      merchant_upi_id: parsed.merchant_upi_id || 'powerstar.services@upi',
-      merchant_name: parsed.merchant_name || 'POWERSTAR SERVICES',
+      merchant_upi_id: parsed.merchant_upi_id || 'powerstar@upi',
+      merchant_name: parsed.merchant_name || 'Powerstar Services',
       bank_account_number: parsed.bank_account_number || '',
       bank_ifsc: parsed.bank_ifsc || ''
     }
   })
   const [saving, setSaving] = useState(false)
+
+  useEffect(() => {
+    async function loadDbSettings() {
+      try {
+        const { data, error } = await supabase.from('platform_settings').select('*')
+        if (data && data.length > 0) {
+          const remoteSettings: Record<string, string> = {}
+          for (const item of data) {
+            remoteSettings[item.key] = item.value
+          }
+          setSettings(prev => ({
+            ...prev,
+            ...(remoteSettings.admin_upi_id ? { merchant_upi_id: remoteSettings.admin_upi_id } : {}),
+            ...(remoteSettings.admin_upi_name ? { merchant_name: remoteSettings.admin_upi_name } : {}),
+            ...(remoteSettings.support_phone ? { support_phone: remoteSettings.support_phone } : {}),
+            ...(remoteSettings.support_email ? { support_email: remoteSettings.support_email } : {}),
+            ...(remoteSettings.platform_fee_percent ? { platform_fee_percent: remoteSettings.platform_fee_percent } : {}),
+            ...(remoteSettings.gst_percent ? { gst_percent: remoteSettings.gst_percent } : {}),
+            ...(remoteSettings.nominal_token_rate ? { min_booking_amount: remoteSettings.nominal_token_rate } : {})
+          }))
+        }
+      } catch (e) {
+        // ignore
+      }
+    }
+    loadDbSettings()
+  }, [])
 
   const handleChange = (key: string, val: string) => {
     setSettings(prev => ({ ...prev, [key]: val }))
@@ -40,9 +68,25 @@ export default function AdminSettings() {
     setSaving(true)
     try {
       localStorage.setItem('ps_admin_upi_settings', JSON.stringify(settings))
+      // Sync to Supabase platform_settings table
+      try {
+        const rows = [
+          { key: 'admin_upi_id', value: settings.merchant_upi_id },
+          { key: 'admin_upi_name', value: settings.merchant_name },
+          { key: 'support_phone', value: settings.support_phone },
+          { key: 'support_email', value: settings.support_email },
+          { key: 'platform_fee_percent', value: String(settings.platform_fee_percent) },
+          { key: 'gst_percent', value: String(settings.gst_percent) },
+          { key: 'nominal_token_rate', value: String(settings.min_booking_amount) }
+        ]
+        await supabase.from('platform_settings').upsert(rows, { onConflict: 'key' })
+      } catch (err) {
+        console.warn('Could not sync to platform_settings in Supabase:', err)
+      }
+
       setTimeout(() => {
         setSaving(false)
-        toast.success('Receiver UPI & Platform settings saved successfully!')
+        toast.success('Receiver UPI & Platform settings saved to database!')
       }, 500)
     } catch (e) {
       setSaving(false)

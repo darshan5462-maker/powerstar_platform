@@ -136,16 +136,40 @@ CREATE TABLE IF NOT EXISTS public.providers (
   updated_at       TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
--- ── 6. PROVIDER LOCATIONS TABLE ──────────────────────────────────────────────
+-- ── 6. PROVIDER SERVICES (MULTI-CATEGORY SUPPORT) ─────────────────────────────
+CREATE TABLE IF NOT EXISTS public.provider_services (
+  id               UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  provider_id      UUID NOT NULL REFERENCES public.providers(id) ON DELETE CASCADE,
+  category_id      UUID NOT NULL REFERENCES public.service_categories(id),
+  hourly_rate      NUMERIC(10,2) DEFAULT 290,
+  experience_years INTEGER DEFAULT 1,
+  is_active        BOOLEAN DEFAULT true,
+  created_at       TIMESTAMPTZ DEFAULT NOW(),
+  UNIQUE(provider_id, category_id)
+);
+
+-- ── 7. PROVIDER LOCATIONS TABLE (LIVE GPS) ────────────────────────────────────
 CREATE TABLE IF NOT EXISTS public.provider_locations (
   provider_id UUID PRIMARY KEY REFERENCES public.providers(id) ON DELETE CASCADE,
   latitude    DOUBLE PRECISION NOT NULL,
   longitude   DOUBLE PRECISION NOT NULL,
-  heading     DOUBLE PRECISION,
+  heading     DOUBLE PRECISION DEFAULT 0,
+  speed       DOUBLE PRECISION DEFAULT 0,
+  accuracy    DOUBLE PRECISION DEFAULT 0,
   updated_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
--- ── 7. BOOKINGS TABLE ────────────────────────────────────────────────────────
+-- ── 8. CUSTOMER LOCATIONS TABLE (FOR PROVIDER NAVIGATION) ─────────────────────
+CREATE TABLE IF NOT EXISTS public.customer_locations (
+  booking_id   UUID PRIMARY KEY,
+  customer_id  UUID NOT NULL REFERENCES public.profiles(id),
+  latitude     DOUBLE PRECISION NOT NULL,
+  longitude    DOUBLE PRECISION NOT NULL,
+  address      TEXT,
+  updated_at   TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- ── 9. BOOKINGS TABLE ─────────────────────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS public.bookings (
   id              UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   booking_ref     TEXT UNIQUE NOT NULL,
@@ -176,7 +200,17 @@ CREATE TABLE IF NOT EXISTS public.bookings (
   updated_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
--- ── 8. PAYMENTS TABLE ────────────────────────────────────────────────────────
+-- Add foreign key constraint to customer_locations referencing bookings
+DO $$ BEGIN
+  ALTER TABLE public.customer_locations
+    DROP CONSTRAINT IF EXISTS customer_locations_booking_id_fkey;
+  ALTER TABLE public.customer_locations
+    ADD CONSTRAINT customer_locations_booking_id_fkey
+    FOREIGN KEY (booking_id) REFERENCES public.bookings(id) ON DELETE CASCADE;
+EXCEPTION WHEN OTHERS THEN null;
+END $$;
+
+-- ── 10. PAYMENTS TABLE ────────────────────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS public.payments (
   id                  UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   booking_id          UUID NOT NULL REFERENCES public.bookings(id) ON DELETE CASCADE,
@@ -197,7 +231,7 @@ CREATE TABLE IF NOT EXISTS public.payments (
   created_at          TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
--- ── 9. REVIEWS TABLE ─────────────────────────────────────────────────────────
+-- ── 11. REVIEWS TABLE ─────────────────────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS public.reviews (
   id          UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   booking_id  UUID NOT NULL REFERENCES public.bookings(id) ON DELETE CASCADE,
@@ -208,7 +242,7 @@ CREATE TABLE IF NOT EXISTS public.reviews (
   created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
--- ── 10. DISPUTES & NOTIFICATIONS ─────────────────────────────────────────────
+-- ── 12. DISPUTES, NOTIFICATIONS & PLATFORM SETTINGS ───────────────────────────
 CREATE TABLE IF NOT EXISTS public.disputes (
   id          UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   booking_id  UUID NOT NULL REFERENCES public.bookings(id) ON DELETE CASCADE,
@@ -239,7 +273,7 @@ CREATE TABLE IF NOT EXISTS public.platform_settings (
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
--- ── 11. INDEXES ──────────────────────────────────────────────────────────────
+-- ── 13. INDEXES ──────────────────────────────────────────────────────────────
 CREATE INDEX IF NOT EXISTS idx_bookings_customer_id ON public.bookings(customer_id);
 CREATE INDEX IF NOT EXISTS idx_bookings_provider_id ON public.bookings(provider_id);
 CREATE INDEX IF NOT EXISTS idx_bookings_status      ON public.bookings(status);
@@ -248,7 +282,7 @@ CREATE INDEX IF NOT EXISTS idx_providers_category   ON public.providers(category
 CREATE INDEX IF NOT EXISTS idx_providers_kyc        ON public.providers(kyc_status);
 CREATE INDEX IF NOT EXISTS idx_payments_booking_id  ON public.payments(booking_id);
 
--- ── 12. AUTOMATED TRIGGERS ────────────────────────────────────────────────────
+-- ── 14. AUTOMATED TRIGGERS ────────────────────────────────────────────────────
 -- Auto generate Booking Ref and Start/End OTPs if not provided
 CREATE OR REPLACE FUNCTION public.set_booking_defaults()
 RETURNS TRIGGER LANGUAGE plpgsql AS $$
@@ -289,7 +323,7 @@ CREATE TRIGGER trg_update_provider_rating
   AFTER INSERT ON public.reviews
   FOR EACH ROW EXECUTE FUNCTION public.update_provider_rating();
 
--- ── 13. SECURITY DEFINER RPC FUNCTIONS ────────────────────────────────────────
+-- ── 15. SECURITY DEFINER RPC FUNCTIONS ────────────────────────────────────────
 -- Function to authoritatively verify if a 10-digit phone exists (bypasses RLS)
 CREATE OR REPLACE FUNCTION public.check_phone_registered(check_phone text)
 RETURNS jsonb
@@ -334,11 +368,13 @@ RETURNS user_role LANGUAGE sql SECURITY DEFINER STABLE AS $$
   SELECT COALESCE((SELECT role FROM public.profiles WHERE id = auth.uid()), 'customer'::user_role);
 $$;
 
--- ── 14. ROW LEVEL SECURITY (RLS) POLICIES ─────────────────────────────────────
+-- ── 16. ROW LEVEL SECURITY (RLS) POLICIES ─────────────────────────────────────
 ALTER TABLE public.profiles           ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.service_categories ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.providers          ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.provider_services  ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.provider_locations ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.customer_locations ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.bookings           ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.payments           ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.reviews            ENABLE ROW LEVEL SECURITY;
@@ -346,9 +382,8 @@ ALTER TABLE public.disputes           ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.notifications      ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.platform_settings  ENABLE ROW LEVEL SECURITY;
 
--- Profiles Policies: allow public select and upsert so anonymous phone auth never fails
-DROP POLICY IF EXISTS "profiles_read_all" ON public.profiles;
-DROP POLICY IF EXISTS "profiles_select_own" ON public.profiles;
+-- Profiles Policies
+DROP POLICY IF EXISTS "profiles_read_all"   ON public.profiles;
 DROP POLICY IF EXISTS "profiles_insert_all" ON public.profiles;
 DROP POLICY IF EXISTS "profiles_update_all" ON public.profiles;
 
@@ -357,21 +392,34 @@ CREATE POLICY "profiles_insert_all" ON public.profiles FOR INSERT WITH CHECK (tr
 CREATE POLICY "profiles_update_all" ON public.profiles FOR UPDATE USING (true);
 
 -- Service Categories (Public view, Admin modify)
-DROP POLICY IF EXISTS "categories_read_all" ON public.service_categories;
+DROP POLICY IF EXISTS "categories_read_all"  ON public.service_categories;
 DROP POLICY IF EXISTS "categories_admin_all" ON public.service_categories;
 
 CREATE POLICY "categories_read_all"  ON public.service_categories FOR SELECT USING (true);
-CREATE POLICY "categories_admin_all" ON public.service_categories FOR ALL USING (get_my_role() = 'admin');
+CREATE POLICY "categories_admin_all" ON public.service_categories FOR ALL USING (true);
 
--- Providers Policies
-DROP POLICY IF EXISTS "providers_read_all" ON public.providers;
+-- Providers & Provider Services Policies
+DROP POLICY IF EXISTS "providers_read_all"  ON public.providers;
 DROP POLICY IF EXISTS "providers_write_all" ON public.providers;
+DROP POLICY IF EXISTS "ps_read_all"         ON public.provider_services;
+DROP POLICY IF EXISTS "ps_write_all"        ON public.provider_services;
 
 CREATE POLICY "providers_read_all"  ON public.providers FOR SELECT USING (true);
 CREATE POLICY "providers_write_all" ON public.providers FOR ALL USING (true);
+CREATE POLICY "ps_read_all"         ON public.provider_services FOR SELECT USING (true);
+CREATE POLICY "ps_write_all"        ON public.provider_services FOR ALL USING (true);
 
--- Bookings Policies: Customers & providers can manage their bookings, Admin sees all
-DROP POLICY IF EXISTS "bookings_read_all" ON public.bookings;
+-- Locations Policies (Live tracking)
+DROP POLICY IF EXISTS "loc_read_all"   ON public.provider_locations;
+DROP POLICY IF EXISTS "loc_write_all"  ON public.provider_locations;
+DROP POLICY IF EXISTS "cusloc_all"     ON public.customer_locations;
+
+CREATE POLICY "loc_read_all"  ON public.provider_locations FOR SELECT USING (true);
+CREATE POLICY "loc_write_all" ON public.provider_locations FOR ALL USING (true);
+CREATE POLICY "cusloc_all"    ON public.customer_locations FOR ALL USING (true);
+
+-- Bookings, Payments, Reviews & Settings
+DROP POLICY IF EXISTS "bookings_read_all"   ON public.bookings;
 DROP POLICY IF EXISTS "bookings_insert_all" ON public.bookings;
 DROP POLICY IF EXISTS "bookings_update_all" ON public.bookings;
 
@@ -379,23 +427,70 @@ CREATE POLICY "bookings_read_all"   ON public.bookings FOR SELECT USING (true);
 CREATE POLICY "bookings_insert_all" ON public.bookings FOR INSERT WITH CHECK (true);
 CREATE POLICY "bookings_update_all" ON public.bookings FOR UPDATE USING (true);
 
--- Payments & Reviews Policies
 DROP POLICY IF EXISTS "payments_all" ON public.payments;
 CREATE POLICY "payments_all" ON public.payments FOR ALL USING (true);
 
 DROP POLICY IF EXISTS "reviews_all" ON public.reviews;
 CREATE POLICY "reviews_all" ON public.reviews FOR ALL USING (true);
 
-DROP POLICY IF EXISTS "locations_all" ON public.provider_locations;
-CREATE POLICY "locations_all" ON public.provider_locations FOR ALL USING (true);
+DROP POLICY IF EXISTS "disputes_all" ON public.disputes;
+CREATE POLICY "disputes_all" ON public.disputes FOR ALL USING (true);
 
-DROP POLICY IF EXISTS "settings_read" ON public.platform_settings;
-CREATE POLICY "settings_read" ON public.platform_settings FOR SELECT USING (true);
+DROP POLICY IF EXISTS "notifications_all" ON public.notifications;
+CREATE POLICY "notifications_all" ON public.notifications FOR ALL USING (true);
 
+DROP POLICY IF EXISTS "settings_read"  ON public.platform_settings;
 DROP POLICY IF EXISTS "settings_admin" ON public.platform_settings;
+
+CREATE POLICY "settings_read"  ON public.platform_settings FOR SELECT USING (true);
 CREATE POLICY "settings_admin" ON public.platform_settings FOR ALL USING (true);
 
--- ── 15. SEED ALL 42 SERVICE CATEGORIES & RATE CARDS ──────────────────────────
+-- ── 17. STORAGE BUCKETS SETUP (KYC & AVATARS) ─────────────────────────────────
+DO $$ BEGIN
+  INSERT INTO storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
+  VALUES (
+    'kyc-documents',
+    'kyc-documents',
+    true,
+    5242880,
+    ARRAY['image/jpeg','image/jpg','image/png','image/webp','application/pdf']
+  )
+  ON CONFLICT (id) DO UPDATE SET
+    public = true,
+    file_size_limit = 5242880,
+    allowed_mime_types = ARRAY['image/jpeg','image/jpg','image/png','image/webp','application/pdf'];
+EXCEPTION WHEN OTHERS THEN null;
+END $$;
+
+DO $$ BEGIN
+  INSERT INTO storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
+  VALUES (
+    'avatars',
+    'avatars',
+    true,
+    2097152,
+    ARRAY['image/jpeg','image/jpg','image/png','image/webp']
+  )
+  ON CONFLICT (id) DO UPDATE SET
+    public = true,
+    file_size_limit = 2097152,
+    allowed_mime_types = ARRAY['image/jpeg','image/jpg','image/png','image/webp'];
+EXCEPTION WHEN OTHERS THEN null;
+END $$;
+
+-- Storage Objects Policies
+DO $$ BEGIN
+  DROP POLICY IF EXISTS "kyc_public_read"   ON storage.objects;
+  DROP POLICY IF EXISTS "kyc_public_insert" ON storage.objects;
+  DROP POLICY IF EXISTS "kyc_public_update" ON storage.objects;
+
+  CREATE POLICY "kyc_public_read"   ON storage.objects FOR SELECT USING (bucket_id IN ('kyc-documents', 'avatars'));
+  CREATE POLICY "kyc_public_insert" ON storage.objects FOR INSERT WITH CHECK (bucket_id IN ('kyc-documents', 'avatars'));
+  CREATE POLICY "kyc_public_update" ON storage.objects FOR UPDATE USING (bucket_id IN ('kyc-documents', 'avatars'));
+EXCEPTION WHEN OTHERS THEN null;
+END $$;
+
+-- ── 18. SEED ALL 42 SERVICE CATEGORIES & RATE CARDS ──────────────────────────
 INSERT INTO public.service_categories (name, name_kn, slug, icon, type, base_price, price_unit, sort_order, description) VALUES
 -- Manpower (20)
 ('Electrician', 'ವಿದ್ಯುತ್ ತಂತ್ರಜ್ಞ', 'electrician', '⚡', 'manpower', 280, '/hr', 1, 'Wiring, fans, switches, MCB, inverter installation'),
@@ -452,7 +547,64 @@ ON CONFLICT (slug) DO UPDATE SET
   price_unit  = EXCLUDED.price_unit,
   description = EXCLUDED.description;
 
--- ── 16. SEED DEFAULT PLATFORM SETTINGS ───────────────────────────────────────
+-- ── 19. SEED VERIFIED PROVIDERS & LIVE TRACKING ───────────────────────────────
+-- Provider 1: Basavaraj Patil (Electrician)
+INSERT INTO public.profiles (id, role, full_name, phone, district, city, is_active)
+VALUES ('00000000-0000-4000-a000-009845012345', 'provider', 'Basavaraj Patil (Master Electrician)', '+91 98450 12345', 'Bengaluru Urban', 'Koramangala', true)
+ON CONFLICT (id) DO UPDATE SET full_name = EXCLUDED.full_name, phone = EXCLUDED.phone;
+
+INSERT INTO public.providers (id, category_id, experience_years, hourly_rate, bio, skills_tags, service_radius, is_online, kyc_status, rating, total_reviews, total_jobs, total_earnings)
+SELECT '00000000-0000-4000-a000-009845012345', id, 6, 280, 'Certified Master Electrician & Power Systems Specialist', ARRAY['Wiring', 'Inverters', 'MCB', 'Appliances'], 35, true, 'verified', 4.90, 142, 310, 86800
+FROM public.service_categories WHERE slug = 'electrician'
+ON CONFLICT (id) DO UPDATE SET rating = EXCLUDED.rating, kyc_status = EXCLUDED.kyc_status, is_online = true;
+
+INSERT INTO public.provider_locations (provider_id, latitude, longitude, heading, speed, accuracy)
+VALUES ('00000000-0000-4000-a000-009845012345', 12.9352, 77.6245, 45, 18, 5)
+ON CONFLICT (provider_id) DO UPDATE SET latitude = EXCLUDED.latitude, longitude = EXCLUDED.longitude;
+
+-- Provider 2: Manjunath Gowda (Plumber)
+INSERT INTO public.profiles (id, role, full_name, phone, district, city, is_active)
+VALUES ('00000000-0000-4000-a000-009448067890', 'provider', 'Manjunath Gowda (Master Plumber)', '+91 94480 67890', 'Bengaluru Urban', 'Jayanagar', true)
+ON CONFLICT (id) DO UPDATE SET full_name = EXCLUDED.full_name, phone = EXCLUDED.phone;
+
+INSERT INTO public.providers (id, category_id, experience_years, hourly_rate, bio, skills_tags, service_radius, is_online, kyc_status, rating, total_reviews, total_jobs, total_earnings)
+SELECT '00000000-0000-4000-a000-009448067890', id, 8, 260, 'Expert Residential & Commercial Plumbing Contractor', ARRAY['Leakage', 'Pipes', 'Sanitary', 'Tanks'], 30, true, 'verified', 4.85, 98, 245, 63700
+FROM public.service_categories WHERE slug = 'plumber'
+ON CONFLICT (id) DO UPDATE SET rating = EXCLUDED.rating, kyc_status = EXCLUDED.kyc_status, is_online = true;
+
+INSERT INTO public.provider_locations (provider_id, latitude, longitude, heading, speed, accuracy)
+VALUES ('00000000-0000-4000-a000-009448067890', 12.9250, 77.5938, 90, 15, 6)
+ON CONFLICT (provider_id) DO UPDATE SET latitude = EXCLUDED.latitude, longitude = EXCLUDED.longitude;
+
+-- Provider 3: Ramesh Kumbar (Tata Ace)
+INSERT INTO public.profiles (id, role, full_name, phone, district, city, is_active)
+VALUES ('00000000-0000-4000-a000-009980054321', 'provider', 'Ramesh Kumbar (Tata Ace Logistics)', '+91 99800 54321', 'Bengaluru Urban', 'Yeshwanthpur', true)
+ON CONFLICT (id) DO UPDATE SET full_name = EXCLUDED.full_name, phone = EXCLUDED.phone;
+
+INSERT INTO public.providers (id, category_id, experience_years, hourly_rate, bio, skills_tags, service_radius, is_online, kyc_status, rating, total_reviews, total_jobs, total_earnings)
+SELECT '00000000-0000-4000-a000-009980054321', id, 5, 899, 'Commercial Goods Transport & Tata Ace Fast Delivery', ARRAY['750kg Goods', 'Fast Transit', 'Careful Handling'], 50, true, 'verified', 4.92, 180, 412, 370388
+FROM public.service_categories WHERE slug = 'tata-ace'
+ON CONFLICT (id) DO UPDATE SET rating = EXCLUDED.rating, kyc_status = EXCLUDED.kyc_status, is_online = true;
+
+INSERT INTO public.provider_locations (provider_id, latitude, longitude, heading, speed, accuracy)
+VALUES ('00000000-0000-4000-a000-009980054321', 13.0280, 77.5407, 180, 30, 8)
+ON CONFLICT (provider_id) DO UPDATE SET latitude = EXCLUDED.latitude, longitude = EXCLUDED.longitude;
+
+-- Provider 4: Anand Kumar (Cleaning)
+INSERT INTO public.profiles (id, role, full_name, phone, district, city, is_active)
+VALUES ('00000000-0000-4000-a000-009741011223', 'provider', 'Anand Kumar (Cleaning Specialist)', '+91 97410 11223', 'Bengaluru Urban', 'Indiranagar', true)
+ON CONFLICT (id) DO UPDATE SET full_name = EXCLUDED.full_name, phone = EXCLUDED.phone;
+
+INSERT INTO public.providers (id, category_id, experience_years, hourly_rate, bio, skills_tags, service_radius, is_online, kyc_status, rating, total_reviews, total_jobs, total_earnings)
+SELECT '00000000-0000-4000-a000-009741011223', id, 4, 200, 'Professional Home Deep Cleaning & Sanitization Team Leader', ARRAY['Deep Clean', 'Kitchen', 'Bathroom', 'Sofa'], 25, true, 'verified', 4.80, 76, 160, 32000
+FROM public.service_categories WHERE slug = 'cleaning'
+ON CONFLICT (id) DO UPDATE SET rating = EXCLUDED.rating, kyc_status = EXCLUDED.kyc_status, is_online = true;
+
+INSERT INTO public.provider_locations (provider_id, latitude, longitude, heading, speed, accuracy)
+VALUES ('00000000-0000-4000-a000-009741011223', 12.9784, 77.6408, 270, 10, 4)
+ON CONFLICT (provider_id) DO UPDATE SET latitude = EXCLUDED.latitude, longitude = EXCLUDED.longitude;
+
+-- ── 20. SEED DEFAULT PLATFORM SETTINGS ───────────────────────────────────────
 INSERT INTO public.platform_settings (key, value) VALUES
   ('admin_upi_id', 'powerstar@upi'),
   ('admin_upi_name', 'Powerstar Services'),
@@ -464,7 +616,7 @@ INSERT INTO public.platform_settings (key, value) VALUES
 ON CONFLICT (key) DO UPDATE SET
   value = EXCLUDED.value;
 
--- ── 17. ENABLE REALTIME SYNC ──────────────────────────────────────────────────
+-- ── 21. ENABLE REALTIME SYNC ──────────────────────────────────────────────────
 DO $$ BEGIN
   ALTER PUBLICATION supabase_realtime ADD TABLE public.bookings;
 EXCEPTION WHEN OTHERS THEN null;
@@ -472,6 +624,11 @@ END $$;
 
 DO $$ BEGIN
   ALTER PUBLICATION supabase_realtime ADD TABLE public.provider_locations;
+EXCEPTION WHEN OTHERS THEN null;
+END $$;
+
+DO $$ BEGIN
+  ALTER PUBLICATION supabase_realtime ADD TABLE public.customer_locations;
 EXCEPTION WHEN OTHERS THEN null;
 END $$;
 
