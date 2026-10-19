@@ -15,7 +15,7 @@ import {
   Edit2
 } from 'lucide-react'
 import { useAuthStore, Role } from '@/store/authStore'
-import { sendPhoneOtp, verifyPhoneOtp, formatIndianPhone } from '@/services/authService'
+import { sendPhoneOtp, verifyPhoneOtp, formatIndianPhone, checkPhoneRegistrationStatus } from '@/services/authService'
 import { DISTRICTS } from '@/data/karnataka'
 import toast from 'react-hot-toast'
 
@@ -100,6 +100,35 @@ export default function AuthCard({
     setLoading(true)
 
     try {
+      // Proactive check: Ensure correct authentication workflow
+      const regStatus = await checkPhoneRegistrationStatus(validE164)
+
+      // 1. If trying to Create Account, but number is ALREADY registered:
+      if (mode === 'register' && regStatus.isRegistered) {
+        const msg = `This mobile number (${validE164}) is already registered! Please switch to Sign In to access your account.`
+        setErrorMessage(msg)
+        toast.error('Number already registered! Switching to Sign In...')
+        setLoading(false)
+        setTimeout(() => {
+          setMode('login')
+          setErrorMessage(null)
+        }, 1600)
+        return
+      }
+
+      // 2. If trying to Sign In, but number is NOT registered:
+      if (mode === 'login' && !regStatus.isRegistered) {
+        const msg = `No registered account found with ${validE164}. Please create an account first.`
+        setErrorMessage(msg)
+        toast.error('Number not registered! Switching to Create Account...')
+        setLoading(false)
+        setTimeout(() => {
+          setMode('register')
+          setErrorMessage(null)
+        }, 1600)
+        return
+      }
+
       const res = await sendPhoneOtp({
         phone: validE164,
         fullName,
@@ -125,6 +154,18 @@ export default function AuthCard({
       const msg = err?.message || 'Failed to dispatch SMS OTP. Please try again.'
       setErrorMessage(msg)
       toast.error(msg)
+
+      if (msg.includes('already registered')) {
+        setTimeout(() => {
+          setMode('login')
+          setErrorMessage(null)
+        }, 1600)
+      } else if (msg.includes('not registered') || msg.includes('Create Account')) {
+        setTimeout(() => {
+          setMode('register')
+          setErrorMessage(null)
+        }, 1600)
+      }
     } finally {
       setLoading(false)
     }

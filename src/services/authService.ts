@@ -20,6 +20,128 @@ export function formatIndianPhone(phone: string): string {
   throw new Error('Please enter a valid 10-digit mobile number.')
 }
 
+// ── LOCAL REGISTRY HELPER (for immediate client persistence across sessions) ──
+const REGISTRY_KEY = 'powerstar_registered_phones'
+
+export function recordRegisteredPhone(phone: string) {
+  try {
+    const clean10 = phone.replace(/\D/g, '').slice(-10)
+    if (!clean10 || clean10.length !== 10) return
+    const stored: string[] = JSON.parse(localStorage.getItem(REGISTRY_KEY) || '[]')
+    if (!stored.includes(clean10)) {
+      stored.push(clean10)
+      localStorage.setItem(REGISTRY_KEY, JSON.stringify(stored))
+    }
+  } catch (e) {}
+}
+
+export function isPhoneInLocalRegistry(clean10: string): boolean {
+  try {
+    const stored: string[] = JSON.parse(localStorage.getItem(REGISTRY_KEY) || '[]')
+    return Array.isArray(stored) && stored.includes(clean10)
+  } catch (e) {
+    return false
+  }
+}
+
+export interface PhoneCheckResult {
+  isRegistered: boolean
+  profile?: {
+    id: string
+    role: Role
+    full_name: string
+    phone: string
+  } | null
+}
+
+export async function checkPhoneRegistrationStatus(rawPhone: string): Promise<PhoneCheckResult> {
+  let formatted = ''
+  try {
+    formatted = formatIndianPhone(rawPhone)
+  } catch (e) {
+    return { isRegistered: false, profile: null }
+  }
+  const clean10 = formatted.slice(-10)
+
+  // 1. Try secure Postgres RPC function in Supabase
+  try {
+    const { data: rpcData, error: rpcError } = await supabase.rpc('check_phone_registered', {
+      check_phone: formatted
+    })
+    if (!rpcError && rpcData && typeof rpcData === 'object') {
+      if (rpcData.registered === true) {
+        recordRegisteredPhone(formatted)
+        return {
+          isRegistered: true,
+          profile: {
+            id: rpcData.id || '',
+            role: rpcData.role || 'customer',
+            full_name: rpcData.full_name || '',
+            phone: formatted
+          }
+        }
+      } else if (rpcData.registered === false) {
+        return { isRegistered: false, profile: null }
+      }
+    }
+  } catch (e) {
+    // RPC might not be installed yet, proceed to table checks
+  }
+
+  // 2. Direct query on profiles table with multiple common phone formats
+  try {
+    const { data, error } = await supabase
+      .from('profiles')
+      .select('id, role, full_name, phone')
+      .or(`phone.eq.${formatted},phone.eq.+91 ${clean10},phone.eq.${clean10}`)
+      .limit(1)
+      .maybeSingle()
+
+    if (!error && data?.id) {
+      recordRegisteredPhone(formatted)
+      return { isRegistered: true, profile: data as any }
+    }
+  } catch (e) {
+    // ignore
+  }
+
+  // 3. Check public providers table
+  try {
+    const { data: provData } = await supabase
+      .from('providers')
+      .select('id, profiles(id, role, full_name, phone)')
+      .limit(50)
+
+    if (provData && provData.length > 0) {
+      const match = provData.find((p: any) => {
+        const ph = p.profiles?.phone || ''
+        return ph.replace(/\D/g, '').endsWith(clean10)
+      })
+      if (match?.profiles?.id) {
+        recordRegisteredPhone(formatted)
+        return { isRegistered: true, profile: match.profiles as any }
+      }
+    }
+  } catch (e) {
+    // ignore
+  }
+
+  // 4. Check client-side registry cache
+  if (isPhoneInLocalRegistry(clean10)) {
+    return {
+      isRegistered: true,
+      profile: {
+        id: 'usr_cached',
+        role: 'customer',
+        full_name: 'Registered User',
+        phone: formatted
+      }
+    }
+  }
+
+  return { isRegistered: false, profile: null }
+}
+
 // ── 1. SEND REAL SMS OTP VIA SUPABASE AUTH ──
 export async function sendPhoneOtp(params: {
   phone: string
@@ -33,24 +155,17 @@ export async function sendPhoneOtp(params: {
   // Security: never permit 'admin' role via phone OTP
   const safeRole: Role = params.role === 'admin' ? 'customer' : (params.role || 'customer')
 
-  // Check if registering a number that already exists
-  if (params.isSignUp) {
-    try {
-      const clean10 = formattedPhone.slice(-10)
-      const { data } = await supabase
-        .from('profiles')
-        .select('id, role')
-        .or(`phone.eq.${formattedPhone},phone.eq.+91 ${clean10},phone.eq.${clean10}`)
-        .limit(1)
-        .maybeSingle()
+  // Check phone registration status
+  const regCheck = await checkPhoneRegistrationStatus(formattedPhone)
 
-      if (data?.id) {
-        throw new Error('This mobile number is already registered! Please switch to Sign In to access your account.')
-      }
-    } catch (err: any) {
-      if (err?.message?.includes('already registered')) throw err
-      // Otherwise ignore query error and proceed
-    }
+  // 1. If registering and number is ALREADY registered -> block duplicate account
+  if (params.isSignUp && regCheck.isRegistered) {
+    throw new Error('This mobile number is already registered! Please switch to Sign In to access your account.')
+  }
+
+  // 2. If signing in and number is NOT registered -> block sign in, require registration
+  if (!params.isSignUp && !regCheck.isRegistered) {
+    throw new Error('No registered account found with this mobile number. Please click Create Account to register first.')
   }
 
   const generatedOtp = Math.floor(100000 + Math.random() * 900000).toString()
@@ -215,7 +330,12 @@ export async function verifyPhoneOtp(params: {
   }
 
   if (!activeProfile) {
-    // Create new profile record
+    // If user was trying to Sign In (not sign up), do not create a new account
+    if (!params.isSignUp) {
+      throw new Error('No registered account found with this mobile number. Please click Create Account to register first.')
+    }
+
+    // Create new profile record for valid sign-up
     const newProfile: Profile = {
       id: userId,
       role: safeRole,
@@ -227,6 +347,7 @@ export async function verifyPhoneOtp(params: {
 
     try {
       await supabase.from('profiles').upsert(newProfile)
+      recordRegisteredPhone(formattedPhone)
       if (safeRole === 'provider') {
         await supabase.from('providers').upsert({
           id: userId,
@@ -246,16 +367,24 @@ export async function verifyPhoneOtp(params: {
     }
 
     activeProfile = newProfile
-  } else if (params.isSignUp && params.fullName) {
-    // Update existing profile details
-    try {
-      await supabase.from('profiles').update({
-        full_name: params.fullName.trim(),
-        district: params.district || activeProfile.district
-      }).eq('id', activeProfile.id)
-      activeProfile.full_name = params.fullName.trim()
-    } catch (e) {
-      // ignore
+  } else {
+    // If profile already exists and user was trying to register another account
+    if (params.isSignUp) {
+      throw new Error('This mobile number is already registered! Please switch to Sign In to access your account.')
+    }
+    recordRegisteredPhone(formattedPhone)
+
+    if (params.fullName) {
+      // Update existing profile details if provided
+      try {
+        await supabase.from('profiles').update({
+          full_name: params.fullName.trim(),
+          district: params.district || activeProfile.district
+        }).eq('id', activeProfile.id)
+        activeProfile.full_name = params.fullName.trim()
+      } catch (e) {
+        // ignore
+      }
     }
   }
 
