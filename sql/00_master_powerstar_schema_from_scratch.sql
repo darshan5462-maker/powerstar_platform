@@ -74,6 +74,12 @@ CREATE TABLE IF NOT EXISTS public.profiles (
   updated_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
+-- Crucial: Drop legacy foreign key to auth.users so phone OTP accounts and seed providers can exist in profiles
+DO $$ BEGIN
+  ALTER TABLE public.profiles DROP CONSTRAINT IF EXISTS profiles_id_fkey;
+EXCEPTION WHEN OTHERS THEN null;
+END $$;
+
 -- Deduplicate existing profiles by 10-digit mobile number before index creation
 WITH ranked_profiles AS (
   SELECT id,
